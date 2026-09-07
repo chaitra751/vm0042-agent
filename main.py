@@ -90,4 +90,9 @@ parallel_chain = RunnableParallel({
     'question': RunnablePassthrough()
 })
 
+main_chain = parallel_chain | prompt | llm | parser
+
 parser = StrOutputParser()
+
+final_result=main_chain.invoke('What is the current version of VM0042?')
+st.write(final_result)
