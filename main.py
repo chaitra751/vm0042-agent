@@ -63,7 +63,7 @@ chat_model = ChatHuggingFace(llm=llm)
 question = st.text_input("Ask a question about VM0042:")
 
 try:
-    response = chat_model.invoke(prompt)
+    response = chat_model.invoke(question)
     st.write(response.content)
 
 except Exception as e:
