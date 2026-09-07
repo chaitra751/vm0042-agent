@@ -48,10 +48,12 @@ except Exception as e:
     st.stop()
 
 
-# Hugging Face LLM
+hf_token = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
+
 llm = HuggingFaceEndpoint(
     repo_id="meta-llama/Llama-3.1-8B-Instruct",
     task="text-generation",
+    huggingfacehub_api_token=hf_token,
 )
 
 chat_model = ChatHuggingFace(llm=llm)
@@ -60,29 +62,10 @@ chat_model = ChatHuggingFace(llm=llm)
 # User input
 question = st.text_input("Ask a question about VM0042:")
 
-if question:
-
-    with st.spinner("Generating answer..."):
-
-        documents = retriever.invoke(question)
-
-        context = "\n\n".join(
-            doc.page_content for doc in documents
-        )
-
-        prompt = f"""
-Answer the question using the context below.
-
-Context:
-{context}
-
-Question:
-{question}
-
-Answer:
-"""
-
-        response = chat_model.invoke(prompt)
-
-    st.write("### Answer")
+try:
+    response = chat_model.invoke(prompt)
     st.write(response.content)
+
+except Exception as e:
+    st.error("Hugging Face request failed")
+    st.exception(e)
