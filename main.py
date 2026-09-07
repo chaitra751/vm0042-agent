@@ -1,6 +1,6 @@
 import streamlit as st
 from pathlib import Path
-from pypdf import PdfReader
+import base64
 
 # ==========================================
 # PAGE CONFIGURATION
@@ -14,107 +14,122 @@ st.set_page_config(
 # ==========================================
 # TITLE
 # ==========================================
-st.title("🌱 VM0042 Agent")
-st.write("Hi! Welcome to the VM0042 Question Answering System.")
+st.title("🌱 VM0042 Question Answering System")
 
 # ==========================================
-# DATA FOLDER PATH
+# DATA FOLDER
 # ==========================================
 PDF_FOLDER = Path(__file__).parent / "data"
 
-# ==========================================
-# FIND ALL PDF FILES
-# ==========================================
+# Get PDF files
 pdf_files = sorted(PDF_FOLDER.glob("*.pdf"))
 
 # ==========================================
-# SIDEBAR
+# SIDEBAR - PDF SELECTION
 # ==========================================
 st.sidebar.title("📚 VM0042 Documents")
 
 if not pdf_files:
+    st.sidebar.error("No PDF files found in data folder.")
+    st.stop()
 
-    st.sidebar.error("No PDF files found.")
+selected_pdf = st.sidebar.selectbox(
+    "Select VM0042 Document",
+    pdf_files,
+    format_func=lambda x: x.name
+)
 
-    st.error(
-        f"No PDF files were found in:\n\n{PDF_FOLDER}"
+st.sidebar.success(f"{len(pdf_files)} PDFs available")
+
+
+# ==========================================
+# TWO COLUMN LAYOUT
+# ==========================================
+left_col, right_col = st.columns([1, 1])
+
+
+# ==========================================
+# LEFT SIDE - PDF VIEWER
+# ==========================================
+with left_col:
+
+    st.subheader("📄 Document")
+
+    st.caption(selected_pdf.name)
+
+    # Read PDF
+    with open(selected_pdf, "rb") as pdf_file:
+        pdf_bytes = pdf_file.read()
+
+    # Convert PDF to base64
+    base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+
+    # Display actual PDF
+    pdf_display = f"""
+    <iframe
+        src="data:application/pdf;base64,{base64_pdf}"
+        width="100%"
+        height="750"
+        style="border: 1px solid #ddd; border-radius: 8px;"
+    >
+    </iframe>
+    """
+
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
+
+# ==========================================
+# RIGHT SIDE - CHATBOT
+# ==========================================
+with right_col:
+
+    st.subheader("🤖 VM0042 Chatbot")
+
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Display previous messages
+    for message in st.session_state.messages:
+
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    # Chat input
+    user_question = st.chat_input(
+        "Ask a question about VM0042..."
     )
 
-else:
+    if user_question:
 
-    st.sidebar.success(
-        f"{len(pdf_files)} PDF files found"
-    )
+        # Display user question
+        with st.chat_message("user"):
+            st.write(user_question)
 
-    # PDF dropdown
-    selected_pdf = st.sidebar.selectbox(
-        "Select a PDF",
-        pdf_files,
-        format_func=lambda x: x.name
-    )
-
-    # ==========================================
-    # MAIN CONTENT
-    # ==========================================
-    st.header("📄 Selected Document")
-
-    st.write(f"**{selected_pdf.name}**")
-
-    # ==========================================
-    # READ PDF
-    # ==========================================
-    try:
-
-        reader = PdfReader(str(selected_pdf))
-
-        total_pages = len(reader.pages)
-
-        st.info(
-            f"Total Pages: {total_pages}"
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": user_question
+            }
         )
 
-        document_text = ""
+        # --------------------------------------
+        # TEMPORARY RESPONSE
+        # Replace this with FAISS + Hugging Face
+        # --------------------------------------
 
-        # Extract text from every page
-        for page_number, page in enumerate(
-            reader.pages,
-            start=1
-        ):
+        answer = (
+            "I received your question. "
+            "The VM0042 FAISS + Hugging Face "
+            "QA pipeline will generate the answer here."
+        )
 
-            page_text = page.extract_text()
+        with st.chat_message("assistant"):
+            st.write(answer)
 
-            if page_text:
-
-                document_text += (
-                    f"\n\n"
-                    f"==============================\n"
-                    f"PAGE {page_number}\n"
-                    f"==============================\n\n"
-                    f"{page_text}"
-                )
-
-        # ==========================================
-        # DISPLAY PDF CONTENT
-        # ==========================================
-        st.subheader("📖 Document Content")
-
-        if document_text.strip():
-
-            st.text_area(
-                "Extracted PDF Text",
-                document_text,
-                height=650
-            )
-
-        else:
-
-            st.warning(
-                "No text could be extracted from this PDF. "
-                "It may be a scanned/image-based PDF."
-            )
-
-    except Exception as e:
-
-        st.error(
-            f"Error reading PDF: {str(e)}"
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": answer
+            }
         )
