@@ -8,7 +8,6 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_huggingface import (
-    ChatHuggingFace,
     HuggingFaceEmbeddings,
     HuggingFaceEndpoint,
 )
@@ -19,7 +18,7 @@ load_dotenv()
 # Streamlit Page Setup
 st.set_page_config(page_title="VM0042 Agent", page_icon="🤖")
 st.title("VM0042 Agent")
-st.write("Hi! Welcome to the Question Answering System.")
+st.write("Hi! Welcome to the VM0042 Question Answering System.")
 
 BASE_DIR = Path(__file__).resolve().parent
 VECTOR_STORE_DIR = BASE_DIR / "vector_store"
@@ -69,21 +68,21 @@ def load_rag_pipeline():
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    # 3. Model Setup (Identical to Colab execution)
+    # 3. Direct HuggingFaceEndpoint setup (Bypasses ChatHuggingFace to avoid routing errors)
     llm = HuggingFaceEndpoint(
         repo_id="mistralai/Mistral-7B-Instruct-v0.3",
         task="text-generation",
+        max_new_tokens=512,
+        temperature=0.1,
         huggingfacehub_api_token=hf_token,
     )
 
-    chat_model = ChatHuggingFace(llm=llm)
-
-    return vector_store, retriever, chat_model
+    return vector_store, retriever, llm
 
 
 # Initialize models and vector store
 try:
-    vector_store, retriever, chat_model = load_rag_pipeline()
+    vector_store, retriever, llm = load_rag_pipeline()
 
     st.sidebar.markdown("### Vector Store Metrics")
     st.sidebar.write("Total Vectors:", vector_store.index.ntotal)
@@ -93,34 +92,40 @@ except Exception as e:
     st.error(f"Failed to initialize pipeline: {e}")
     st.stop()
 
-# 4. Prompt Template (Identical to Colab execution)
+# 4. Prompt Template formatted with Mistral [INST] tags
 prompt = PromptTemplate(
-    template="""
-      You are a helpful assistant.
-      Answer ONLY from the provided transcript context.
-      If the context is insufficient, just say you don't know.
+    template="""<s>[INST] You are a helpful assistant.
+Answer ONLY from the provided transcript context.
+If the context is insufficient, respond strictly with 'I don't know.'
 
-      {context}
-      Question: {question}
-    """,
+Context:
+{context}
+
+Question: {question} [/INST]""",
     input_variables=["context", "question"],
 )
 
-# 5. UI Query Processing
-question = st.text_input("Ask a question:", key="user_question")
+# 5. Build standard LCEL Chain
+parser = StrOutputParser()
+main_chain = prompt | llm | parser
+
+# 6. UI Query Processing
+question = st.text_input("Ask a question about VM0042:", key="user_question")
 
 if question:
     with st.spinner("Generating answer..."):
         try:
-            # Step-by-step processing exactly as run in Google Colab
+            # Document retrieval and context construction
             retrieved_docs = retriever.invoke(question)
             context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
 
-            final_prompt = prompt.invoke({"context": context_text, "question": question})
-            answer = chat_model.invoke(final_prompt)
+            # Invoke the execution chain
+            final_result = main_chain.invoke(
+                {"context": context_text, "question": question}
+            )
 
             st.write("### Answer")
-            st.write(answer.content)
+            st.write(final_result)
 
         except Exception as e:
             st.error(f"Error generating answer: {e}")
