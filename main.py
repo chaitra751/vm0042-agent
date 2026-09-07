@@ -11,6 +11,9 @@ st.title("VM0042 Agent")
 
 st.write("Hi! Welcome to the VM0042 Question Answering System.")
 
+# Load the FAISS index
+index = faiss.read_index("index.faiss")
+
 st.write(index)
 
 # Optional: show basic information
