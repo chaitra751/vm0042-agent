@@ -1,10 +1,12 @@
 from pathlib import Path
-import base64
-import faiss
 import streamlit as st
-import streamlit.components.v1 as components
+
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_huggingface import (
+    HuggingFaceEmbeddings,
+    HuggingFaceEndpoint,
+    ChatHuggingFace
+)
 
 st.title("VM0042 Agent")
 st.write("Hi! Welcome to the VM0042 Question Answering System.")
@@ -17,11 +19,12 @@ if not INDEX_PATH.exists():
     st.error(f"FAISS index not found: {INDEX_PATH}")
     st.stop()
 
-# 1. Initialize the embedding model (Dimension 384)
-# If you used OpenAI embeddings originally, use OpenAIEmbeddings() instead
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# Hugging Face Embeddings
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
 
-# 2. Load the LangChain FAISS vector store cleanly
+# Load FAISS vector store
 try:
     vector_store = FAISS.load_local(
         folder_path=str(VECTOR_STORE_DIR),
@@ -29,18 +32,56 @@ try:
         allow_dangerous_deserialization=True,
     )
 
-    # 3. Display metadata using the underlying FAISS index object
     st.write("Number of vectors:", vector_store.index.ntotal)
     st.write("Vector dimension:", vector_store.index.d)
 
-    # 4. Initialize retriever
     retriever = vector_store.as_retriever(
-        search_type="similarity", search_kwargs={"k": 4}
+        search_type="similarity",
+        search_kwargs={"k": 4}
     )
 
-    retriever_result=retriever.invoke('What is vm0042')
-    st.write(retriever_result)
     st.success("Vector store loaded successfully!")
 
 except Exception as e:
     st.error(f"Failed to load vector store: {e}")
+    st.stop()
+
+
+# Hugging Face LLM
+llm = HuggingFaceEndpoint(
+    repo_id="meta-llama/Llama-3.1-8B-Instruct",
+    task="text-generation",
+)
+
+chat_model = ChatHuggingFace(llm=llm)
+
+
+# User input
+question = st.text_input("Ask a question about VM0042:")
+
+if question:
+
+    with st.spinner("Generating answer..."):
+
+        documents = retriever.invoke(question)
+
+        context = "\n\n".join(
+            doc.page_content for doc in documents
+        )
+
+        prompt = f"""
+Answer the question using the context below.
+
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:
+"""
+
+        response = chat_model.invoke(prompt)
+
+    st.write("### Answer")
+    st.write(response.content)
