@@ -6,8 +6,9 @@ import streamlit as st
 
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_huggingface import (
+    ChatHuggingFace,
     HuggingFaceEmbeddings,
     HuggingFaceEndpoint,
 )
@@ -68,7 +69,7 @@ def load_rag_pipeline():
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    # 3. Direct HuggingFaceEndpoint setup (Bypasses ChatHuggingFace to avoid routing errors)
+    # 3. Model Setup matching Novita's conversational API requirements
     llm = HuggingFaceEndpoint(
         repo_id="mistralai/Mistral-7B-Instruct-v0.3",
         task="conversational",
@@ -78,12 +79,15 @@ def load_rag_pipeline():
         huggingfacehub_api_token=hf_token,
     )
 
-    return vector_store, retriever, llm
+    # Wrap endpoint to construct valid conversational payloads
+    chat_model = ChatHuggingFace(llm=llm)
+
+    return vector_store, retriever, chat_model
 
 
 # Initialize models and vector store
 try:
-    vector_store, retriever, llm = load_rag_pipeline()
+    vector_store, retriever, chat_model = load_rag_pipeline()
 
     st.sidebar.markdown("### Vector Store Metrics")
     st.sidebar.write("Total Vectors:", vector_store.index.ntotal)
@@ -93,22 +97,26 @@ except Exception as e:
     st.error(f"Failed to initialize pipeline: {e}")
     st.stop()
 
-# 4. Prompt Template formatted with Mistral [INST] tags
-prompt = PromptTemplate(
-    template="""<s>[INST] You are a helpful assistant.
-Answer ONLY from the provided transcript context.
-If the context is insufficient, respond strictly with 'I don't know.'
-
-Context:
+# 4. Use ChatPromptTemplate to supply structured message roles to ChatHuggingFace
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You are a helpful assistant. Answer ONLY from the provided transcript context. If the context is insufficient, respond strictly with 'I don't know.'",
+        ),
+        (
+            "human",
+            """Context:
 {context}
 
-Question: {question} [/INST]""",
-    input_variables=["context", "question"],
+Question: {question}""",
+        ),
+    ]
 )
 
-# 5. Build standard LCEL Chain
+# 5. Build LCEL Chain
 parser = StrOutputParser()
-main_chain = prompt | llm | parser
+main_chain = prompt | chat_model | parser
 
 # 6. UI Query Processing
 question = st.text_input("Ask a question about VM0042:", key="user_question")
