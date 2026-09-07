@@ -69,17 +69,16 @@ def load_rag_pipeline():
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    # 3. Model Setup matching Novita's conversational API requirements
+    # 3. Model Setup using Llama 3.2 3B Instruct
     llm = HuggingFaceEndpoint(
-        repo_id="mistralai/Mistral-7B-Instruct-v0.3",
-        task="conversational",
+        repo_id="meta-llama/Llama-3.2-3B-Instruct",
         provider="auto",
+        task="text-generation",
         max_new_tokens=512,
         temperature=0.1,
         huggingfacehub_api_token=hf_token,
     )
 
-    # Wrap endpoint to construct valid conversational payloads
     chat_model = ChatHuggingFace(llm=llm)
 
     return vector_store, retriever, chat_model
@@ -97,7 +96,7 @@ except Exception as e:
     st.error(f"Failed to initialize pipeline: {e}")
     st.stop()
 
-# 4. Use ChatPromptTemplate to supply structured message roles to ChatHuggingFace
+# 4. Prompt Template
 prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -124,11 +123,9 @@ question = st.text_input("Ask a question about VM0042:", key="user_question")
 if question:
     with st.spinner("Generating answer..."):
         try:
-            # Document retrieval and context construction
             retrieved_docs = retriever.invoke(question)
             context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
 
-            # Invoke the execution chain
             final_result = main_chain.invoke(
                 {"context": context_text, "question": question}
             )
