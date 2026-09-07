@@ -76,9 +76,9 @@ def load_rag_pipeline():
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    # 4. LLM Setup (Switched to Qwen 2.5 Instruct for full ChatHuggingFace compatibility)
+    # 4. LLM Setup (Explicit provider routing to prevent external provider redirects)
     llm = HuggingFaceEndpoint(
-        repo_id="Qwen/Qwen2.5-7B-Instruct",
+        repo_id="HuggingFaceH4/zephyr-7b-beta",
         task="text-generation",
         max_new_tokens=512,
         temperature=0.1,
