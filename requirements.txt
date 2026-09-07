@@ -9,6 +9,7 @@ python-dotenv
 pypdf
 streamlit
 faiss-cpu
+langchain-openai
 
 langchain-huggingface
 transformers
