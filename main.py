@@ -31,12 +31,13 @@ embeddings = HuggingFaceEmbeddings(
 # 2. LOAD FAISS VECTOR STORE
 # =========================================================
 
+VECTOR_STORE_PATH = Path(__file__).parent / "vectore_store"
+
 vector_store = FAISS.load_local(
-    folder_path="/content/vectore_store",
+    folder_path=str(VECTOR_STORE_PATH),
     embeddings=embeddings,
     allow_dangerous_deserialization=True
 )
-
 
 # =========================================================
 # 3. CREATE RETRIEVER
