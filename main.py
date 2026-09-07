@@ -76,14 +76,14 @@ def load_rag_pipeline():
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    # 4. LLM Setup
+    # 4. LLM Setup (Switched to Qwen 2.5 Instruct for full ChatHuggingFace compatibility)
     llm = HuggingFaceEndpoint(
-    repo_id="mistralai/Mistral-7B-Instruct-v0.3",
-    task="text-generation",
-
-)
-
-
+        repo_id="Qwen/Qwen2.5-7B-Instruct",
+        task="text-generation",
+        max_new_tokens=512,
+        temperature=0.1,
+        huggingfacehub_api_token=hf_token,
+    )
 
     chat_model = ChatHuggingFace(llm=llm)
 
