@@ -4,6 +4,7 @@ import base64
 import streamlit.components.v1 as components
 import faiss
 from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
 
 
 import streamlit as st
@@ -28,4 +29,15 @@ st.write(vector_store )
 st.write("Number of vectors:", vector_store .ntotal)
 st.write("Vector dimension:", vector_store .d)
 
-retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+embeddings = OpenAIEmbeddings()
+
+vector_store = FAISS.load_local(
+    "vector_store",
+    embeddings,
+    allow_dangerous_deserialization=True
+)
+
+retriever = vector_store.as_retriever(
+    search_type="similarity",
+    search_kwargs={"k": 4}
+)
