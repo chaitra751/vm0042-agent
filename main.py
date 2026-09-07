@@ -92,7 +92,7 @@ parallel_chain = RunnableParallel({
 })
 
 parser = StrOutputParser()
-main_chain = parallel_chain | prompt | llm | parser
+main_chain = parallel_chain | prompt | chat_model | parser
 
 
 
