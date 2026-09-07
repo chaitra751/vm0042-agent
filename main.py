@@ -75,3 +75,5 @@ prompt = PromptTemplate(
     input_variables = ['context', 'question']
 )
 
+question = "'What is vm0042"
+retrieved_docs = retriever.invoke(question)
