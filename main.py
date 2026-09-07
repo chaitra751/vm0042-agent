@@ -1,6 +1,7 @@
 import streamlit as st
 from pathlib import Path
 import base64
+import streamlit.components.v1 as components
 
 # ==========================================
 # PAGE CONFIGURATION
@@ -11,9 +12,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# ==========================================
-# TITLE
-# ==========================================
 st.title("🌱 VM0042 Question Answering System")
 
 # ==========================================
@@ -21,11 +19,10 @@ st.title("🌱 VM0042 Question Answering System")
 # ==========================================
 PDF_FOLDER = Path(__file__).parent / "data"
 
-# Get PDF files
 pdf_files = sorted(PDF_FOLDER.glob("*.pdf"))
 
 # ==========================================
-# SIDEBAR - PDF SELECTION
+# SIDEBAR
 # ==========================================
 st.sidebar.title("📚 VM0042 Documents")
 
@@ -41,41 +38,50 @@ selected_pdf = st.sidebar.selectbox(
 
 st.sidebar.success(f"{len(pdf_files)} PDFs available")
 
-
 # ==========================================
-# TWO COLUMN LAYOUT
+# TWO COLUMNS
 # ==========================================
 left_col, right_col = st.columns([1, 1])
 
-
 # ==========================================
-# LEFT SIDE - PDF VIEWER
+# LEFT SIDE - ACTUAL PDF
 # ==========================================
 with left_col:
 
-    st.subheader("📄 Document")
-
+    st.subheader("📄 VM0042 Document")
     st.caption(selected_pdf.name)
 
-    # Read PDF
-    with open(selected_pdf, "rb") as pdf_file:
-        pdf_bytes = pdf_file.read()
+    # Read selected PDF
+    with open(selected_pdf, "rb") as file:
+        pdf_bytes = file.read()
 
-    # Convert PDF to base64
-    base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+    # Convert PDF to Base64
+    pdf_base64 = base64.b64encode(pdf_bytes).decode("utf-8")
 
-    # Display actual PDF
-    pdf_display = f"""
-    <iframe
-        src="data:application/pdf;base64,{base64_pdf}"
-        width="100%"
-        height="750"
-        style="border: 1px solid #ddd; border-radius: 8px;"
-    >
-    </iframe>
+    # PDF Viewer
+    pdf_html = f"""
+    <html>
+    <body style="margin:0; padding:0;">
+
+        <iframe
+            src="data:application/pdf;base64,{pdf_base64}"
+            width="100%"
+            height="750px"
+            style="
+                border: 1px solid #cccccc;
+                border-radius: 8px;
+            ">
+        </iframe>
+
+    </body>
+    </html>
     """
 
-    st.markdown(pdf_display, unsafe_allow_html=True)
+    components.html(
+        pdf_html,
+        height=760,
+        scrolling=False
+    )
 
 
 # ==========================================
@@ -85,11 +91,10 @@ with right_col:
 
     st.subheader("🤖 VM0042 Chatbot")
 
-    # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Display previous messages
+    # Display chat history
     for message in st.session_state.messages:
 
         with st.chat_message(message["role"]):
@@ -102,34 +107,24 @@ with right_col:
 
     if user_question:
 
-        # Display user question
         with st.chat_message("user"):
             st.write(user_question)
 
-        st.session_state.messages.append(
-            {
-                "role": "user",
-                "content": user_question
-            }
-        )
+        st.session_state.messages.append({
+            "role": "user",
+            "content": user_question
+        })
 
-        # --------------------------------------
-        # TEMPORARY RESPONSE
-        # Replace this with FAISS + Hugging Face
-        # --------------------------------------
-
+        # Temporary answer
         answer = (
-            "I received your question. "
-            "The VM0042 FAISS + Hugging Face "
-            "QA pipeline will generate the answer here."
+            "Your FAISS + Hugging Face answer "
+            "will appear here."
         )
 
         with st.chat_message("assistant"):
             st.write(answer)
 
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": answer
-            }
-        )
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer
+        })
