@@ -115,7 +115,7 @@ Question: {question}""",
 
 # 5. Build LCEL Chain
 parser = StrOutputParser()
-main_chain = prompt | chat_model | parser
+main_chain = parallel_chain | prompt | chat_model | parser
 
 # 6. UI Query Processing
 question = st.text_input("Ask a question about VM0042:", key="user_question")
