@@ -1,7 +1,8 @@
 from pathlib import Path
 import os
-import streamlit as st
 from dotenv import load_dotenv
+from huggingface_hub import whoami
+import streamlit as st
 
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
@@ -17,7 +18,6 @@ from langchain_huggingface import (
     HuggingFaceEndpoint,
 )
 
-# Load local environment variables from .env if present
 load_dotenv()
 
 st.set_page_config(page_title="VM0042 Agent", page_icon="🤖")
@@ -28,15 +28,11 @@ BASE_DIR = Path(__file__).resolve().parent
 VECTOR_STORE_DIR = BASE_DIR / "vector_store"
 INDEX_PATH = VECTOR_STORE_DIR / "index.faiss"
 
-# Validate Vector Store existence
 if not INDEX_PATH.exists():
     st.error(f"FAISS index not found: {INDEX_PATH}")
     st.stop()
 
 
-# ==========================================
-# CACHED RESOURCE INITIALIZATION
-# ==========================================
 @st.cache_resource
 def load_rag_pipeline():
     # 1. Retrieve & Validate API Token
@@ -46,18 +42,30 @@ def load_rag_pipeline():
 
     if not hf_token:
         st.error(
-            "Hugging Face API Token missing! Please add HUGGINGFACEHUB_API_TOKEN to your .env or .streamlit/secrets.toml file."
+            "Hugging Face API Token missing! Please add HUGGINGFACEHUB_API_TOKEN to your .env or secrets.toml file."
+        )
+        st.stop()
+
+    # Test token validity before initializing models
+    try:
+        user_info = whoami(token=hf_token)
+        st.sidebar.success(
+            f"Authenticated as: {user_info.get('name', 'User')}"
+        )
+    except Exception as token_err:
+        st.error(
+            f"Hugging Face Authentication Failed: {token_err}. Please generate a new token."
         )
         st.stop()
 
     os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token
 
-    # 2. Hugging Face Embeddings (384 Dimensions)
+    # 2. Embeddings (384 Dimensions)
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    # 3. Load FAISS vector store
+    # 3. Vector Store
     vector_store = FAISS.load_local(
         folder_path=str(VECTOR_STORE_DIR),
         embeddings=embeddings,
@@ -68,7 +76,7 @@ def load_rag_pipeline():
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    # 4. Initialize HuggingFace LLM
+    # 4. LLM Setup
     llm = HuggingFaceEndpoint(
         repo_id="meta-llama/Llama-3.1-8B-Instruct",
         task="text-generation",
@@ -86,7 +94,6 @@ def load_rag_pipeline():
 try:
     vector_store, retriever, chat_model = load_rag_pipeline()
 
-    # Display basic metrics in the sidebar
     st.sidebar.markdown("### Vector Store Metrics")
     st.sidebar.write("Total Vectors:", vector_store.index.ntotal)
     st.sidebar.write("Vector Dimension:", vector_store.index.d)
@@ -95,11 +102,7 @@ except Exception as e:
     st.error(f"Failed to initialize RAG pipeline: {e}")
     st.stop()
 
-
-# ==========================================
-# PROMPT & DOC FORMATTING
-# ==========================================
-
+# Prompt & Chain
 prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -122,10 +125,6 @@ def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
 
-# ==========================================
-# CHAIN SETUP
-# ==========================================
-
 parallel_chain = RunnableParallel(
     {
         "context": retriever | RunnableLambda(format_docs),
@@ -135,11 +134,6 @@ parallel_chain = RunnableParallel(
 
 parser = StrOutputParser()
 main_chain = parallel_chain | prompt | chat_model | parser
-
-
-# ==========================================
-# USER QUESTION & INVOCATION
-# ==========================================
 
 question = st.text_input("Ask a question about VM0042:", key="user_question")
 
