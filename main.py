@@ -82,11 +82,10 @@ def load_rag_pipeline():
 
     # 4. LLM Endpoint (Forcing native serverless infrastructure)
     llm = HuggingFaceEndpoint(
-        repo_id="meta-llama/Llama-3.2-3B-Instruct",
-        provider="auto",  
+        repo_id="mistralai/Mistral-7B-Instruct-v0.3",
+         
         task="text-generation",
-        max_new_tokens=512,
-        temperature=0.1,
+
         huggingfacehub_api_token=hf_token,
     )
 
