@@ -29,7 +29,7 @@ st.write(vector_store )
 st.write("Number of vectors:", vector_store .ntotal)
 st.write("Vector dimension:", vector_store .d)
 
-embeddings = OpenAIEmbeddings()
+
 
 vector_store = FAISS.load_local(
     "vector_store",
