@@ -6,12 +6,7 @@ import streamlit as st
 
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import (
-    RunnableLambda,
-    RunnableParallel,
-    RunnablePassthrough,
-)
+from langchain_core.prompts import PromptTemplate
 from langchain_huggingface import (
     ChatHuggingFace,
     HuggingFaceEmbeddings,
@@ -21,16 +16,15 @@ from langchain_huggingface import (
 # Load environment variables
 load_dotenv()
 
-# Streamlit UI Configuration
+# Streamlit Page Setup
 st.set_page_config(page_title="VM0042 Agent", page_icon="🤖")
 st.title("VM0042 Agent")
-st.write("Hi! Welcome to the VM0042 Question Answering System.")
+st.write("Hi! Welcome to the Question Answering System.")
 
 BASE_DIR = Path(__file__).resolve().parent
 VECTOR_STORE_DIR = BASE_DIR / "vector_store"
 INDEX_PATH = VECTOR_STORE_DIR / "index.faiss"
 
-# Validate Vector Store Existence
 if not INDEX_PATH.exists():
     st.error(f"FAISS index not found: {INDEX_PATH}")
     st.stop()
@@ -49,27 +43,22 @@ def load_rag_pipeline():
         )
         st.stop()
 
-    # Validate token credentials against Hugging Face API
     try:
         user_info = whoami(token=hf_token)
         st.sidebar.success(
             f"Authenticated as: {user_info.get('name', 'User')}"
         )
     except Exception as token_err:
-        st.error(
-            f"Hugging Face Authentication Failed: {token_err}. Please generate a new token."
-        )
+        st.error(f"Hugging Face Authentication Failed: {token_err}")
         st.stop()
 
     os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token
-    os.environ["HF_TOKEN"] = hf_token
 
-    # 2. Local Embeddings (384 Dimensions)
+    # 2. Embeddings & Vector Store
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    # 3. Vector Store Retrieval Setup
     vector_store = FAISS.load_local(
         folder_path=str(VECTOR_STORE_DIR),
         embeddings=embeddings,
@@ -80,16 +69,13 @@ def load_rag_pipeline():
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    # 4. LLM Endpoint (Forcing native serverless infrastructure)
+    # 3. Model Setup (Identical to Colab execution)
     llm = HuggingFaceEndpoint(
         repo_id="mistralai/Mistral-7B-Instruct-v0.3",
-         
         task="text-generation",
-
         huggingfacehub_api_token=hf_token,
     )
 
-    # Wrap endpoint for ChatCompletions schema
     chat_model = ChatHuggingFace(llm=llm)
 
     return vector_store, retriever, chat_model
@@ -104,52 +90,37 @@ try:
     st.sidebar.write("Vector Dimension:", vector_store.index.d)
 
 except Exception as e:
-    st.error(f"Failed to initialize RAG pipeline: {e}")
+    st.error(f"Failed to initialize pipeline: {e}")
     st.stop()
 
-# Prompt Template Construction
-prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "You are a helpful assistant. Answer ONLY from the provided VM0042 context. If the context is insufficient, respond strictly with 'I don't know.'",
-        ),
-        (
-            "human",
-            """Context:
-{context}
+# 4. Prompt Template (Identical to Colab execution)
+prompt = PromptTemplate(
+    template="""
+      You are a helpful assistant.
+      Answer ONLY from the provided transcript context.
+      If the context is insufficient, just say you don't know.
 
-Question:
-{question}""",
-        ),
-    ]
+      {context}
+      Question: {question}
+    """,
+    input_variables=["context", "question"],
 )
 
-
-def format_docs(docs):
-    return "\n\n".join(doc.page_content for doc in docs)
-
-
-# Parallel Retrieval & Context Formatting Chain
-parallel_chain = RunnableParallel(
-    {
-        "context": retriever | RunnableLambda(format_docs),
-        "question": RunnablePassthrough(),
-    }
-)
-
-# Output Parser & Execution Chain
-parser = StrOutputParser()
-main_chain = parallel_chain | prompt | chat_model | parser
-
-# UI Query Input & Response Generation
-question = st.text_input("Ask a question about VM0042:", key="user_question")
+# 5. UI Query Processing
+question = st.text_input("Ask a question:", key="user_question")
 
 if question:
     with st.spinner("Generating answer..."):
         try:
-            final_result = main_chain.invoke(question)
+            # Step-by-step processing exactly as run in Google Colab
+            retrieved_docs = retriever.invoke(question)
+            context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
+
+            final_prompt = prompt.invoke({"context": context_text, "question": question})
+            answer = chat_model.invoke(final_prompt)
+
             st.write("### Answer")
-            st.write(final_result)
+            st.write(answer.content)
+
         except Exception as e:
             st.error(f"Error generating answer: {e}")
