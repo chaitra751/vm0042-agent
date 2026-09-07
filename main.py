@@ -38,8 +38,8 @@ try:
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    retriever.invoke('What is vm0042')
-    st.write(retriever)
+    retriever_result=retriever.invoke('What is vm0042')
+    st.write(retriever_result)
     st.success("Vector store loaded successfully!")
 
 except Exception as e:
