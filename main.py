@@ -3,6 +3,8 @@ import streamlit as st
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
+
+
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import (
     HuggingFaceEmbeddings,
@@ -66,35 +68,78 @@ question = st.text_input("Ask a question about VM0042:")
 
 prompt = PromptTemplate(
     template="""
-      You are a helpful assistant.
-      Answer ONLY from the provided transcript context.
-      If the context is insufficient, just say you don't know.
+You are a helpful assistant.
 
-      {context}
-      Question: {question}
-    """,
-    input_variables = ['context', 'question']
+Answer ONLY from the provided VM0042 context.
+If the context is insufficient, just say "I don't know."
+
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:
+""",
+    input_variables=["context", "question"]
 )
 
-question = "'What is vm0042"
-retrieved_docs = retriever.invoke(question)
 
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
-from langchain_core.output_parsers import StrOutputParser
+# ==========================================
+# FORMAT RETRIEVED DOCUMENTS
+# ==========================================
 
 def format_docs(retrieved_docs):
-  context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
-  return context_text
+    return "\n\n".join(
+        doc.page_content for doc in retrieved_docs
+    )
+
+
+# ==========================================
+# RETRIEVAL CHAIN
+# ==========================================
 
 parallel_chain = RunnableParallel({
-    'context': retriever | RunnableLambda(format_docs),
-    'question': RunnablePassthrough()
+    "context": retriever | RunnableLambda(format_docs),
+    "question": RunnablePassthrough()
 })
 
+
+# ==========================================
+# OUTPUT PARSER
+# ==========================================
+
 parser = StrOutputParser()
-main_chain = parallel_chain | prompt | chat_model | parser
 
 
+# ==========================================
+# MAIN RAG CHAIN
+# ==========================================
 
-final_result=main_chain.invoke('What is the current version of VM0042?')
-st.write(final_result)
+main_chain = (
+    parallel_chain
+    | prompt
+    | chat_model
+    | parser
+)
+
+
+# ==========================================
+# STREAMLIT INPUT
+# ==========================================
+
+question = st.text_input(
+    "Ask a question about VM0042:"
+)
+
+
+# ==========================================
+# GENERATE ANSWER
+# ==========================================
+
+if question:
+    with st.spinner("Searching VM0042 documents..."):
+        final_result = main_chain.invoke(question)
+
+    st.write("### Answer")
+    st.write(final_result)
