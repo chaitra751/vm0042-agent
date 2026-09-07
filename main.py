@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 import faiss
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
-
+from langchain_huggingface import HuggingFaceEmbeddings
 
 import streamlit as st
 
