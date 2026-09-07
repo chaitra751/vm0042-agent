@@ -18,8 +18,10 @@ from langchain_huggingface import (
     HuggingFaceEndpoint,
 )
 
+# Load environment variables
 load_dotenv()
 
+# Streamlit UI Configuration
 st.set_page_config(page_title="VM0042 Agent", page_icon="🤖")
 st.title("VM0042 Agent")
 st.write("Hi! Welcome to the VM0042 Question Answering System.")
@@ -28,6 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent
 VECTOR_STORE_DIR = BASE_DIR / "vector_store"
 INDEX_PATH = VECTOR_STORE_DIR / "index.faiss"
 
+# Validate Vector Store Existence
 if not INDEX_PATH.exists():
     st.error(f"FAISS index not found: {INDEX_PATH}")
     st.stop()
@@ -46,7 +49,7 @@ def load_rag_pipeline():
         )
         st.stop()
 
-    # Test token validity before initializing models
+    # Validate token credentials against Hugging Face API
     try:
         user_info = whoami(token=hf_token)
         st.sidebar.success(
@@ -59,13 +62,14 @@ def load_rag_pipeline():
         st.stop()
 
     os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token
+    os.environ["HF_TOKEN"] = hf_token
 
-    # 2. Embeddings (384 Dimensions)
+    # 2. Local Embeddings (384 Dimensions)
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    # 3. Vector Store
+    # 3. Vector Store Retrieval Setup
     vector_store = FAISS.load_local(
         folder_path=str(VECTOR_STORE_DIR),
         embeddings=embeddings,
@@ -76,15 +80,17 @@ def load_rag_pipeline():
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    # 4. LLM Setup (Explicit provider routing to prevent external provider redirects)
+    # 4. LLM Endpoint (Forcing native serverless infrastructure)
     llm = HuggingFaceEndpoint(
-        repo_id="HuggingFaceH4/zephyr-7b-beta",
+        repo_id="meta-llama/Llama-3.2-3B-Instruct",
+        provider="hf-inference",
         task="text-generation",
         max_new_tokens=512,
         temperature=0.1,
         huggingfacehub_api_token=hf_token,
     )
 
+    # Wrap endpoint for ChatCompletions schema
     chat_model = ChatHuggingFace(llm=llm)
 
     return vector_store, retriever, chat_model
@@ -102,7 +108,7 @@ except Exception as e:
     st.error(f"Failed to initialize RAG pipeline: {e}")
     st.stop()
 
-# Prompt & Chain
+# Prompt Template Construction
 prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -125,6 +131,7 @@ def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
 
+# Parallel Retrieval & Context Formatting Chain
 parallel_chain = RunnableParallel(
     {
         "context": retriever | RunnableLambda(format_docs),
@@ -132,9 +139,11 @@ parallel_chain = RunnableParallel(
     }
 )
 
+# Output Parser & Execution Chain
 parser = StrOutputParser()
 main_chain = parallel_chain | prompt | chat_model | parser
 
+# UI Query Input & Response Generation
 question = st.text_input("Ask a question about VM0042:", key="user_question")
 
 if question:
