@@ -37,6 +37,9 @@ try:
     retriever = vector_store.as_retriever(
         search_type="similarity", search_kwargs={"k": 4}
     )
+
+    retriever.invoke('What is vm0042')
+    st.write(retriever)
     st.success("Vector store loaded successfully!")
 
 except Exception as e:
