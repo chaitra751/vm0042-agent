@@ -29,9 +29,7 @@ st.write(vector_store )
 st.write("Number of vectors:", vector_store .ntotal)
 st.write("Vector dimension:", vector_store .d)
 
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+
 
 vector_store = FAISS.load_local(
     "vector_store",
