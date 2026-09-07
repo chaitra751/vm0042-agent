@@ -62,3 +62,15 @@ chat_model = ChatHuggingFace(llm=llm)
 # User input
 question = st.text_input("Ask a question about VM0042:")
 
+prompt = PromptTemplate(
+    template="""
+      You are a helpful assistant.
+      Answer ONLY from the provided transcript context.
+      If the context is insufficient, just say you don't know.
+
+      {context}
+      Question: {question}
+    """,
+    input_variables = ['context', 'question']
+)
+
