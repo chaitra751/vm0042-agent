@@ -8,6 +8,8 @@ huggingface_hub
 python-dotenv
 pypdf
 streamlit
+import streamlit as st
+import faiss
 
 langchain-huggingface
 transformers
