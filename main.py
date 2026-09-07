@@ -62,10 +62,3 @@ chat_model = ChatHuggingFace(llm=llm)
 # User input
 question = st.text_input("Ask a question about VM0042:")
 
-try:
-    response = chat_model.invoke(question)
-    st.write(response.content)
-
-except Exception as e:
-    st.error("Hugging Face request failed")
-    st.exception(e)
