@@ -71,7 +71,7 @@ def load_rag_pipeline():
     # 3. Direct HuggingFaceEndpoint setup (Bypasses ChatHuggingFace to avoid routing errors)
     llm = HuggingFaceEndpoint(
         repo_id="mistralai/Mistral-7B-Instruct-v0.3",
-        task="text-generation",
+        task="conversational",
         provider="auto",
         max_new_tokens=512,
         temperature=0.1,
