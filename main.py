@@ -5,7 +5,7 @@ st.title("VM0042 Agent")
 st.write("Hi! Welcome to the VM0042 Question Answering System.")
 
 
-PDF_FOLDER = Path("data")
+PDF_FOLDER = Path("./data")
 
 pdf_files = sorted(PDF_FOLDER.glob("*.pdf"))
 
