@@ -1,6 +1,7 @@
 from pathlib import Path
-from dotenv import load_dotenv
+import os
 import streamlit as st
+from dotenv import load_dotenv
 
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
@@ -16,8 +17,10 @@ from langchain_huggingface import (
     HuggingFaceEndpoint,
 )
 
+# Load local environment variables from .env if present
 load_dotenv()
 
+st.set_page_config(page_title="VM0042 Agent", page_icon="🤖")
 st.title("VM0042 Agent")
 st.write("Hi! Welcome to the VM0042 Question Answering System.")
 
@@ -25,6 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent
 VECTOR_STORE_DIR = BASE_DIR / "vector_store"
 INDEX_PATH = VECTOR_STORE_DIR / "index.faiss"
 
+# Validate Vector Store existence
 if not INDEX_PATH.exists():
     st.error(f"FAISS index not found: {INDEX_PATH}")
     st.stop()
@@ -35,12 +39,25 @@ if not INDEX_PATH.exists():
 # ==========================================
 @st.cache_resource
 def load_rag_pipeline():
-    # 1. Hugging Face Embeddings
+    # 1. Retrieve & Validate API Token
+    hf_token = st.secrets.get("HUGGINGFACEHUB_API_TOKEN") or os.getenv(
+        "HUGGINGFACEHUB_API_TOKEN"
+    )
+
+    if not hf_token:
+        st.error(
+            "Hugging Face API Token missing! Please add HUGGINGFACEHUB_API_TOKEN to your .env or .streamlit/secrets.toml file."
+        )
+        st.stop()
+
+    os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token
+
+    # 2. Hugging Face Embeddings (384 Dimensions)
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    # 2. Load FAISS vector store
+    # 3. Load FAISS vector store
     vector_store = FAISS.load_local(
         folder_path=str(VECTOR_STORE_DIR),
         embeddings=embeddings,
@@ -51,12 +68,7 @@ def load_rag_pipeline():
         search_type="similarity", search_kwargs={"k": 4}
     )
 
-    # 3. Initialize Hugging Face LLM
-    # Assumes HUGGINGFACEHUB_API_TOKEN is stored in st.secrets or .env
-    hf_token = st.secrets.get(
-        "HUGGINGFACEHUB_API_TOKEN", st.secrets.get("HF_TOKEN")
-    )
-
+    # 4. Initialize HuggingFace LLM
     llm = HuggingFaceEndpoint(
         repo_id="meta-llama/Llama-3.1-8B-Instruct",
         task="text-generation",
@@ -70,10 +82,11 @@ def load_rag_pipeline():
     return vector_store, retriever, chat_model
 
 
+# Initialize models and vector store
 try:
     vector_store, retriever, chat_model = load_rag_pipeline()
 
-    # Display basic metrics once loaded
+    # Display basic metrics in the sidebar
     st.sidebar.markdown("### Vector Store Metrics")
     st.sidebar.write("Total Vectors:", vector_store.index.ntotal)
     st.sidebar.write("Vector Dimension:", vector_store.index.d)
@@ -84,7 +97,7 @@ except Exception as e:
 
 
 # ==========================================
-# PROMPT TEMPLATE
+# PROMPT & DOC FORMATTING
 # ==========================================
 
 prompt = ChatPromptTemplate.from_messages(
