@@ -22,7 +22,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 
 # ============================================================
-# STREAMLIT PAGE CONFIG
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -38,9 +38,16 @@ st.set_page_config(
 
 st.title("🌱 VM0042 Question Answering System")
 
-st.write(
-    "Ask questions about the VM0042 Improved Agricultural "
-    "Land Management methodology."
+st.markdown(
+    """
+    Ask questions about **VM0042 Improved Agricultural Land Management**.
+    
+    This application uses:
+    - Hugging Face embeddings
+    - FAISS vector database
+    - Llama 3.1
+    - LangChain
+    """
 )
 
 
@@ -48,78 +55,118 @@ st.write(
 # HUGGING FACE TOKEN
 # ============================================================
 
-# Streamlit Cloud:
-# Go to:
-# Settings → Secrets
-#
-# Add:
-# HF_TOKEN = "your_huggingface_token"
+try:
+    HF_TOKEN = st.secrets["HF_TOKEN"]
+except Exception:
+    HF_TOKEN = os.getenv("HF_TOKEN")
 
-HF_TOKEN = st.secrets.get("HF_TOKEN", os.getenv("HF_TOKEN"))
 
 if not HF_TOKEN:
     st.error(
-        "Hugging Face token is missing. "
-        "Add HF_TOKEN to Streamlit Cloud Secrets."
+        "❌ Hugging Face token not found.\n\n"
+        "Add HF_TOKEN to Streamlit Cloud → Manage app → Settings → Secrets."
     )
     st.stop()
 
 
 # ============================================================
-# 1. LOAD EMBEDDING MODEL
+# LOAD EMBEDDINGS
 # ============================================================
 
 @st.cache_resource
 def load_embeddings():
 
-    embeddings = HuggingFaceEmbeddings(
+    return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    return embeddings
 
+try:
 
-embeddings = load_embeddings()
+    embeddings = load_embeddings()
+
+except Exception as e:
+
+    st.error("❌ Failed to load embedding model.")
+    st.exception(e)
+    st.stop()
 
 
 # ============================================================
-# 2. LOAD FAISS VECTOR STORE
+# VECTOR STORE PATH
+# ============================================================
+
+VECTOR_STORE_PATH = Path(__file__).parent / "vector_store"
+
+
+# ============================================================
+# CHECK VECTOR STORE
+# ============================================================
+
+if not VECTOR_STORE_PATH.exists():
+
+    st.error(
+        f"""
+        ❌ Vector store folder not found.
+
+        Expected location:
+
+        `{VECTOR_STORE_PATH}`
+
+        Your GitHub repository should contain:
+
+        ```
+        vm0042-agent/
+        ├── main.py
+        ├── requirements.txt
+        └── vector_store/
+            ├── index.faiss
+            └── index.pkl
+        ```
+        """
+    )
+
+    st.stop()
+
+
+# ============================================================
+# CHECK FAISS FILES
+# ============================================================
+
+FAISS_INDEX = VECTOR_STORE_PATH / "index.faiss"
+FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
+
+
+if not FAISS_INDEX.exists():
+
+    st.error(
+        f"❌ `index.faiss` not found inside:\n\n"
+        f"`{VECTOR_STORE_PATH}`"
+    )
+
+    st.stop()
+
+
+if not FAISS_PICKLE.exists():
+
+    st.error(
+        f"❌ `index.pkl` not found inside:\n\n"
+        f"`{VECTOR_STORE_PATH}`"
+    )
+
+    st.stop()
+
+
+# ============================================================
+# LOAD FAISS
 # ============================================================
 
 @st.cache_resource
-def load_vector_store(_embeddings):
+def load_vector_store():
 
-    # Path relative to main.py
-    vector_store_path = Path(__file__).parent / "vectore_store"
-
-    # Check folder exists
-    if not vector_store_path.exists():
-
-        raise FileNotFoundError(
-            f"Vector store folder not found: "
-            f"{vector_store_path}"
-        )
-
-    # Check FAISS files
-    index_file = vector_store_path / "index.faiss"
-    pickle_file = vector_store_path / "index.pkl"
-
-    if not index_file.exists():
-
-        raise FileNotFoundError(
-            f"Missing index.faiss in {vector_store_path}"
-        )
-
-    if not pickle_file.exists():
-
-        raise FileNotFoundError(
-            f"Missing index.pkl in {vector_store_path}"
-        )
-
-    # Load FAISS
     vector_store = FAISS.load_local(
-        str(vector_store_path),
-        _embeddings,
+        str(VECTOR_STORE_PATH),
+        embeddings,
         allow_dangerous_deserialization=True
     )
 
@@ -128,11 +175,16 @@ def load_vector_store(_embeddings):
 
 try:
 
-    vector_store = load_vector_store(embeddings)
+    vector_store = load_vector_store()
 
 except Exception as e:
 
-    st.error("Unable to load the FAISS vector store.")
+    st.error("❌ Unable to load FAISS vector store.")
+
+    st.write(
+        "Make sure `index.faiss` and `index.pkl` were created "
+        "with the same embedding model."
+    )
 
     st.exception(e)
 
@@ -140,7 +192,7 @@ except Exception as e:
 
 
 # ============================================================
-# 3. CREATE RETRIEVER
+# CREATE RETRIEVER
 # ============================================================
 
 retriever = vector_store.as_retriever(
@@ -151,7 +203,7 @@ retriever = vector_store.as_retriever(
 
 
 # ============================================================
-# 4. HUGGING FACE LLM
+# HUGGING FACE LLM
 # ============================================================
 
 @st.cache_resource
@@ -172,11 +224,19 @@ def load_llm():
     return chat_model
 
 
-chat_model = load_llm()
+try:
+
+    chat_model = load_llm()
+
+except Exception as e:
+
+    st.error("❌ Failed to initialize Hugging Face LLM.")
+    st.exception(e)
+    st.stop()
 
 
 # ============================================================
-# 5. PROMPT
+# PROMPT
 # ============================================================
 
 prompt = PromptTemplate(
@@ -184,13 +244,11 @@ prompt = PromptTemplate(
 You are an expert assistant for the VM0042
 Improved Agricultural Land Management methodology.
 
-Answer the user's question using ONLY the information
-provided in the context.
+Use ONLY the information provided in the context.
 
-Do not make up information.
+Do not invent or assume information.
 
-If the answer is not available in the context,
-say:
+If the answer is not available in the context, respond:
 
 "I could not find this information in the VM0042 documents."
 
@@ -212,10 +270,13 @@ Answer:
 
 
 # ============================================================
-# 6. FORMAT DOCUMENTS
+# FORMAT DOCUMENTS
 # ============================================================
 
 def format_docs(retrieved_docs):
+
+    if not retrieved_docs:
+        return "No relevant documents were found."
 
     context_text = "\n\n".join(
         doc.page_content
@@ -226,7 +287,7 @@ def format_docs(retrieved_docs):
 
 
 # ============================================================
-# 7. PARALLEL CHAIN
+# PARALLEL RETRIEVAL CHAIN
 # ============================================================
 
 parallel_chain = RunnableParallel(
@@ -238,14 +299,14 @@ parallel_chain = RunnableParallel(
 
 
 # ============================================================
-# 8. OUTPUT PARSER
+# OUTPUT PARSER
 # ============================================================
 
 parser = StrOutputParser()
 
 
 # ============================================================
-# 9. MAIN RAG CHAIN
+# MAIN RAG CHAIN
 # ============================================================
 
 main_chain = (
@@ -257,22 +318,57 @@ main_chain = (
 
 
 # ============================================================
-# 10. STREAMLIT QUESTION INPUT
+# SIDEBAR
+# ============================================================
+
+with st.sidebar:
+
+    st.header("🌱 VM0042 Agent")
+
+    st.success("Vector store loaded")
+
+    st.write(
+        f"Documents retrieved: 4"
+    )
+
+    st.divider()
+
+    st.write("**Embedding model**")
+
+    st.code(
+        "all-MiniLM-L6-v2"
+    )
+
+    st.write("**LLM**")
+
+    st.code(
+        "Llama-3.1-8B-Instruct"
+    )
+
+    st.write("**Vector database**")
+
+    st.code(
+        "FAISS"
+    )
+
+
+# ============================================================
+# USER QUESTION
 # ============================================================
 
 question = st.text_input(
-    "🔎 Ask your question:",
+    "🔎 Ask your question about VM0042",
     placeholder="Example: What is the applicability of VM0042?"
 )
 
 
 # ============================================================
-# 11. RUN RAG
+# GENERATE ANSWER
 # ============================================================
 
 if question:
 
-    with st.spinner("Searching VM0042 documents..."):
+    with st.spinner("🔎 Searching VM0042 documents..."):
 
         try:
 
@@ -284,35 +380,8 @@ if question:
 
         except Exception as e:
 
-            st.error("Error while generating the answer.")
+            st.error(
+                "❌ Error while generating the answer."
+            )
 
             st.exception(e)
-
-
-# ============================================================
-# 12. SIDEBAR
-# ============================================================
-
-with st.sidebar:
-
-    st.header("🌱 VM0042 Agent")
-
-    st.write(
-        "This application uses:"
-    )
-
-    st.write(
-        """
-        - 📚 FAISS Vector Database
-        - 🔎 Semantic Search
-        - 🤗 Hugging Face Embeddings
-        - 🦙 Llama 3.1
-        - 🔗 LangChain
-        """
-    )
-
-    st.divider()
-
-    st.write(
-        "Vector store: vectore_store"
-    )
