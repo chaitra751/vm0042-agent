@@ -3,6 +3,7 @@ from pathlib import Path
 import base64
 import streamlit.components.v1 as components
 import faiss
+from langchain_community.vectorstores import FAISS
 
 
 import streamlit as st
@@ -19,3 +20,5 @@ st.write(index)
 # Optional: show basic information
 st.write("Number of vectors:", index.ntotal)
 st.write("Vector dimension:", index.d)
+
+retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
