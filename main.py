@@ -12,8 +12,15 @@ st.title("VM0042 Agent")
 
 st.write("Hi! Welcome to the VM0042 Question Answering System.")
 
-# Load the FAISS index
-vector_store = faiss.read_index("vector_store/index.faiss")
+BASE_DIR = Path(__file__).resolve().parent
+INDEX_PATH = BASE_DIR / "vector_store" / "index.faiss"
+
+if not INDEX_PATH.exists():
+    st.error(f"FAISS index not found: {INDEX_PATH}")
+    st.stop()
+
+vector_store = faiss.read_index(str(INDEX_PATH))
+
 
 st.write(vector_store )
 
