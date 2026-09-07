@@ -15,10 +15,10 @@ st.write("Hi! Welcome to the VM0042 Question Answering System.")
 # Load the FAISS index
 vector_store = faiss.read_index("index.faiss")
 
-st.write(index)
+st.write(vector_store )
 
 # Optional: show basic information
-st.write("Number of vectors:", index.ntotal)
-st.write("Vector dimension:", index.d)
+st.write("Number of vectors:", vector_store .ntotal)
+st.write("Vector dimension:", vector_store .d)
 
 retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
