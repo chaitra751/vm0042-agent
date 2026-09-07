@@ -70,6 +70,10 @@ chat_model = ChatHuggingFace(llm=llm)
 # User input
 question = st.text_input("Ask a question about VM0042:")
 
+# ==========================================
+# PROMPT
+# ==========================================
+
 prompt = PromptTemplate(
     template="""
 You are a helpful assistant.
@@ -90,17 +94,17 @@ Answer:
 
 
 # ==========================================
-# FORMAT RETRIEVED DOCUMENTS
+# FORMAT DOCUMENTS
 # ==========================================
 
-def format_docs(retrieved_docs):
+def format_docs(docs):
     return "\n\n".join(
-        doc.page_content for doc in retrieved_docs
+        doc.page_content for doc in docs
     )
 
 
 # ==========================================
-# RETRIEVAL CHAIN
+# PARALLEL RETRIEVAL CHAIN
 # ==========================================
 
 parallel_chain = RunnableParallel({
@@ -110,15 +114,10 @@ parallel_chain = RunnableParallel({
 
 
 # ==========================================
-# OUTPUT PARSER
+# MAIN CHAIN
 # ==========================================
 
 parser = StrOutputParser()
-
-
-# ==========================================
-# MAIN RAG CHAIN
-# ==========================================
 
 main_chain = (
     parallel_chain
@@ -129,20 +128,15 @@ main_chain = (
 
 
 # ==========================================
-# STREAMLIT INPUT
+# USER QUESTION
 # ==========================================
 
 question = st.text_input(
     "Ask a question about VM0042:"
 )
 
-
-# ==========================================
-# GENERATE ANSWER
-# ==========================================
-
 if question:
-    with st.spinner("Searching VM0042 documents..."):
+    with st.spinner("Generating answer..."):
         final_result = main_chain.invoke(question)
 
     st.write("### Answer")
