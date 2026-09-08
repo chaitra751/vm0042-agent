@@ -45,7 +45,7 @@ st.markdown(
     This application uses:
     - Hugging Face embeddings
     - FAISS vector database
-    - all-MiniLM-L6-v2"
+    - llama/Llama-3.1-8B-Instruct
     - LangChain
     """
 )
