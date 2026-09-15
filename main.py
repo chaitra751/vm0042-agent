@@ -123,14 +123,11 @@ FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
 
 
 if not FAISS_INDEX.exists():
-
     st.error(
         f"❌ `index.faiss` not found inside:\n\n"
         f"`{VECTOR_STORE_PATH}`"
     )
-
     st.stop()
-
 
 if not FAISS_PICKLE.exists():
 
@@ -154,9 +151,7 @@ def load_vector_store():
         embeddings,
         allow_dangerous_deserialization=True
     )
-
     return vector_store
-
 
 try:
 
@@ -170,9 +165,7 @@ except Exception as e:
         "Make sure `index.faiss` and `index.pkl` were created "
         "with the same embedding model."
     )
-
     st.exception(e)
-
     st.stop()
 
 
@@ -316,7 +309,6 @@ parallel_chain = RunnableParallel(
 
 parser = StrOutputParser()
 
-
 # ============================================================
 # MAIN RAG CHAIN
 # ============================================================
@@ -327,8 +319,6 @@ main_chain = (
     | chat_model
     | parser
 )
-
-
 
 # ============================================================
 # USER QUESTION
@@ -363,3 +353,37 @@ if question:
             )
 
             st.exception(e)
+
+with history_tab:
+
+    st.subheader("📚 All Asked Questions and Answers")
+
+    if len(st.session_state.qa_history) == 0:
+
+        st.info("No questions have been asked yet.")
+
+    else:
+
+        # Newest question first
+        for i, item in enumerate(
+            reversed(st.session_state.qa_history), 1
+        ):
+
+            st.markdown(
+                f"### Question {len(st.session_state.qa_history) - i + 1}"
+            )
+
+            st.markdown("**Question:**")
+            st.write(item["question"])
+
+            st.markdown("**Answer:**")
+            st.write(item["answer"])
+
+            st.divider()
+
+        # Clear history button
+        if st.button("🗑️ Clear History"):
+
+            st.session_state.qa_history = []
+
+            st.rerun()
