@@ -20,7 +20,6 @@ from langchain_core.runnables import (
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -31,15 +30,11 @@ st.set_page_config(
     layout="wide"
 )
 
-
 # ============================================================
 # TITLE
 # ============================================================
 
 st.title("🌱 VM0042 Question Answering System")
-
-
-
 
 # ============================================================
 # HUGGING FACE TOKEN
@@ -306,40 +301,6 @@ main_chain = (
     | parser
 )
 
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
-with st.sidebar:
-
-    st.header("🌱 VM0042 Agent")
-
-    st.success("Vector store loaded")
-
-    st.write(
-        f"Documents retrieved: 4"
-    )
-
-    st.divider()
-
-    st.write("**Embedding model**")
-
-    st.code(
-        "all-MiniLM-L6-v2"
-    )
-
-    st.write("**LLM**")
-
-    st.code(
-        "Llama-3.1-8B-Instruct"
-    )
-
-    st.write("**Vector database**")
-
-    st.code(
-        "FAISS"
-    )
 
 
 # ============================================================
