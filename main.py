@@ -20,9 +20,8 @@ from langchain_core.runnables import (
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -31,18 +30,11 @@ st.set_page_config(
     layout="wide"
 )
 
-
 # ============================================================
 # TITLE
 # ============================================================
 
 st.title("🌱 VM0042 Question Answering System")
-
-st.caption(
-    "Verra VM0042 Improved Agricultural Land Management "
-    "document-based AI assistant"
-)
-
 
 # ============================================================
 # HUGGING FACE TOKEN
@@ -55,17 +47,10 @@ except Exception:
 
 
 if not HF_TOKEN:
-
     st.error(
-        """
-        ❌ Hugging Face token not found.
-
-        Please add `HF_TOKEN` to:
-
-        Streamlit Cloud → Manage app → Settings → Secrets
-        """
+        "❌ Hugging Face token not found.\n\n"
+        "Add HF_TOKEN to Streamlit Cloud → Manage app → Settings → Secrets."
     )
-
     st.stop()
 
 
@@ -88,9 +73,7 @@ try:
 except Exception as e:
 
     st.error("❌ Failed to load embedding model.")
-
     st.exception(e)
-
     st.stop()
 
 
@@ -102,7 +85,7 @@ VECTOR_STORE_PATH = Path(__file__).parent / "vector_store"
 
 
 # ============================================================
-# CHECK VECTOR STORE FOLDER
+# CHECK VECTOR STORE
 # ============================================================
 
 if not VECTOR_STORE_PATH.exists():
@@ -111,18 +94,20 @@ if not VECTOR_STORE_PATH.exists():
         f"""
         ❌ Vector store folder not found.
 
-        Expected:
+        Expected location:
 
         `{VECTOR_STORE_PATH}`
 
         Your GitHub repository should contain:
 
+        ```
         vm0042-agent/
         ├── main.py
         ├── requirements.txt
         └── vector_store/
             ├── index.faiss
             └── index.pkl
+        ```
         """
     )
 
@@ -138,37 +123,24 @@ FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
 
 
 if not FAISS_INDEX.exists():
-
     st.error(
-        f"""
-        ❌ `index.faiss` not found.
-
-        Expected location:
-
-        `{FAISS_INDEX}`
-        """
+        f"❌ `index.faiss` not found inside:\n\n"
+        f"`{VECTOR_STORE_PATH}`"
     )
-
     st.stop()
-
 
 if not FAISS_PICKLE.exists():
 
     st.error(
-        f"""
-        ❌ `index.pkl` not found.
-
-        Expected location:
-
-        `{FAISS_PICKLE}`
-        """
+        f"❌ `index.pkl` not found inside:\n\n"
+        f"`{VECTOR_STORE_PATH}`"
     )
 
     st.stop()
 
 
 # ============================================================
-# LOAD FAISS VECTOR STORE
+# LOAD FAISS
 # ============================================================
 
 @st.cache_resource
@@ -179,9 +151,7 @@ def load_vector_store():
         embeddings,
         allow_dangerous_deserialization=True
     )
-
     return vector_store
-
 
 try:
 
@@ -192,17 +162,10 @@ except Exception as e:
     st.error("❌ Unable to load FAISS vector store.")
 
     st.write(
-        """
-        Make sure that:
-
-        1. `index.faiss` exists
-        2. `index.pkl` exists
-        3. Both files were created using the same embedding model
-        """
+        "Make sure `index.faiss` and `index.pkl` were created "
+        "with the same embedding model."
     )
-
     st.exception(e)
-
     st.stop()
 
 
@@ -210,6 +173,7 @@ except Exception as e:
 # CREATE RETRIEVER
 # ============================================================
 
+#retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
 retriever = vector_store.as_retriever(
     search_type="mmr",
     search_kwargs={
@@ -221,7 +185,7 @@ retriever = vector_store.as_retriever(
 
 
 # ============================================================
-# LOAD HUGGING FACE LLM
+# HUGGING FACE LLM
 # ============================================================
 
 @st.cache_resource
@@ -249,9 +213,7 @@ try:
 except Exception as e:
 
     st.error("❌ Failed to initialize Hugging Face LLM.")
-
     st.exception(e)
-
     st.stop()
 
 
@@ -261,116 +223,72 @@ except Exception as e:
 
 prompt = PromptTemplate(
     template="""
-
 You are a technical assistant specialized in the Verra VM0042
 Improved Agricultural Land Management methodology.
 
-Your task is to answer the user's question using ONLY the
-information provided in the context below.
+Your task is to answer the user's question using ONLY the information
+provided in the context below.
 
 IMPORTANT RULES:
 
-1. Use ONLY the provided context.
+1. Use only the provided context. Do not use your own knowledge or
+   assumptions to fill missing information.
 
-2. Do not use your own knowledge, assumptions, or information
-outside the provided VM0042 documents.
+2. If the answer cannot be found in the context, respond exactly:
+   "I don't know based on the provided VM0042 documents."
 
-3. If the answer cannot be found in the context, respond exactly:
+3. Do not invent, modify, or assume any VM0042 requirements, values,
+   equations, variables, definitions, or eligibility criteria.
 
-"I don't know based on the provided VM0042 documents."
-
-4. Do not invent, modify, or assume any VM0042:
-   - requirements
-   - values
-   - equations
-   - variables
-   - definitions
-   - eligibility criteria
-   - procedures
-   - monitoring requirements
-
-5. For questions about equations or calculations:
-
-   - Identify the relevant equation from the context.
+4. For questions about equations or calculations:
+   - First identify the relevant equation from the context.
    - Write the equation clearly.
-   - Explain each variable.
-   - Substitute the provided values.
+   - Explain each variable and parameter.
+   - Substitute the given values.
    - Show the calculation step by step.
    - Give the final result with the correct unit.
-   - Do not create an equation that is not present in the context.
+   - Do not create an equation if it is not present in the context.
 
-6. If multiple sections of the context are relevant, combine
-them carefully into one clear answer.
+5. If multiple sections of the context are relevant, combine them
+   carefully and provide one clear answer.
 
-7. If the context contains conflicting information, mention the
-conflict instead of choosing an answer based on assumption.
+6. If the context contains conflicting information, mention the
+   conflict instead of choosing an answer by assumption.
 
-8. For questions about:
-   - project activity
-   - applicability
-   - eligibility
-   - baseline
-   - project boundary
-   - additionality
-   - leakage
-   - emission reductions
-   - monitoring
+7. For questions about project activity eligibility, baseline,
+   project boundaries, additionality, leakage, emission reductions,
+   or monitoring, use the exact requirements available in the context.
 
-   use the exact information available in the context.
+8. Keep the answer concise, factual, and easy to understand.
 
-9. Keep the answer concise, factual, and easy to understand.
+9. When possible, mention the relevant document section, equation,
+   or page information available in the context.
 
-10. When possible, mention the relevant section, equation,
-document information, or page information available in the
-context.
 
-------------------------------------------------------------
-CONTEXT
-------------------------------------------------------------
-
-{context}
-
-------------------------------------------------------------
-USER QUESTION
-------------------------------------------------------------
-
+USER QUESTION:
 {question}
 
-------------------------------------------------------------
-ANSWER
-------------------------------------------------------------
-
+ANSWER:
 """,
-    input_variables=[
-        "context",
-        "question"
-    ]
+    input_variables=["context", "question"]
 )
 
 
 # ============================================================
-# FORMAT RETRIEVED DOCUMENTS
+# FORMAT DOCUMENTS
 # ============================================================
 
 def format_docs(retrieved_docs):
 
     if not retrieved_docs:
+        return "No relevant documents were found."
 
-        return (
-            "No relevant VM0042 documents were found."
-        )
-
-    context_parts = []
-
-    for doc in retrieved_docs:
-
-        context_parts.append(
-            doc.page_content
-        )
-
-    return "\n\n--- DOCUMENT SECTION ---\n\n".join(
-        context_parts
+    context_text = "\n\n".join(
+        doc.page_content
+        for doc in retrieved_docs
     )
+
+    return context_text
 
 
 # ============================================================
@@ -379,11 +297,7 @@ def format_docs(retrieved_docs):
 
 parallel_chain = RunnableParallel(
     {
-        "context": (
-            retriever
-            | RunnableLambda(format_docs)
-        ),
-
+        "context": retriever | RunnableLambda(format_docs),
         "question": RunnablePassthrough()
     }
 )
@@ -394,7 +308,6 @@ parallel_chain = RunnableParallel(
 # ============================================================
 
 parser = StrOutputParser()
-
 
 # ============================================================
 # MAIN RAG CHAIN
@@ -407,194 +320,69 @@ main_chain = (
     | parser
 )
 
-
 # ============================================================
-# SESSION STATE
-# ============================================================
-
-if "qa_history" not in st.session_state:
-
-    st.session_state.qa_history = []
-
-
-# ============================================================
-# CREATE TABS
+# USER QUESTION
 # ============================================================
 
-chat_tab, history_tab = st.tabs(
-    [
-        "💬 Ask Questions",
-        "📚 Question & Answer History"
-    ]
+question = st.text_input(
+    "🔎 Ask your question about VM0042",
+    placeholder="Example: What is the applicability of VM0042?"
 )
 
 
 # ============================================================
-# CHATBOT TAB
+# GENERATE ANSWER
 # ============================================================
 
-with chat_tab:
+if question:
 
-    st.subheader(
-        "🔎 Ask a question about VM0042"
-    )
+    with st.spinner("🔎 Searching VM0042 documents..."):
 
-    question = st.text_input(
-        "Enter your question:",
-        placeholder=(
-            "Example: What is the applicability "
-            "of VM0042?"
-        ),
-        key="question_input"
-    )
+        try:
 
+            answer = main_chain.invoke(question)
 
-    # --------------------------------------------------------
-    # ASK BUTTON
-    # --------------------------------------------------------
+            st.subheader("🤖 Answer")
 
-    ask_button = st.button(
-        "🔍 Ask Question",
-        type="primary"
-    )
+            st.write(answer)
 
+        except Exception as e:
 
-    if ask_button:
-
-        if not question.strip():
-
-            st.warning(
-                "⚠️ Please enter a question."
+            st.error(
+                "❌ Error while generating the answer."
             )
 
-        else:
-
-            with st.spinner(
-                "🔎 Searching VM0042 documents..."
-            ):
-
-                try:
-
-                    # Generate answer
-                    answer = main_chain.invoke(
-                        question
-                    )
-
-
-                    # ----------------------------------------
-                    # DISPLAY ANSWER
-                    # ----------------------------------------
-
-                    st.subheader(
-                        "🤖 Answer"
-                    )
-
-                    st.write(answer)
-
-
-                    # ----------------------------------------
-                    # SAVE QUESTION + ANSWER
-                    # ----------------------------------------
-
-                    st.session_state.qa_history.append(
-                        {
-                            "question": question,
-                            "answer": answer
-                        }
-                    )
-
-
-                except Exception as e:
-
-                    st.error(
-                        "❌ Error while generating the answer."
-                    )
-
-                    st.exception(e)
-
-
-# ============================================================
-# QUESTION & ANSWER HISTORY TAB
-# ============================================================
+            st.exception(e)
 
 with history_tab:
 
-    st.subheader(
-        "📚 All Asked Questions and Answers"
-    )
+    st.subheader("📚 All Asked Questions and Answers")
 
+    if len(st.session_state.qa_history) == 0:
 
-    # --------------------------------------------------------
-    # NO HISTORY
-    # --------------------------------------------------------
-
-    if not st.session_state.qa_history:
-
-        st.info(
-            "No questions have been asked yet."
-        )
-
-
-    # --------------------------------------------------------
-    # DISPLAY HISTORY
-    # --------------------------------------------------------
+        st.info("No questions have been asked yet.")
 
     else:
 
-        st.write(
-            f"Total questions: "
-            f"**{len(st.session_state.qa_history)}**"
-        )
-
-
         # Newest question first
         for i, item in enumerate(
-            reversed(
-                st.session_state.qa_history
-            ),
-            1
+            reversed(st.session_state.qa_history), 1
         ):
 
-            question_number = (
-                len(st.session_state.qa_history)
-                - i
-                + 1
-            )
-
-
             st.markdown(
-                f"### Question {question_number}"
+                f"### Question {len(st.session_state.qa_history) - i + 1}"
             )
 
+            st.markdown("**Question:**")
+            st.write(item["question"])
 
-            st.markdown(
-                "**❓ Question:**"
-            )
-
-            st.write(
-                item["question"]
-            )
-
-
-            st.markdown(
-                "**🤖 Answer:**"
-            )
-
-            st.write(
-                item["answer"]
-            )
-
+            st.markdown("**Answer:**")
+            st.write(item["answer"])
 
             st.divider()
 
-
-        # ----------------------------------------------------
-        # CLEAR HISTORY
-        # ----------------------------------------------------
-
-        if st.button(
-            "🗑️ Clear Question History"
-        ):
+        # Clear history button
+        if st.button("🗑️ Clear History"):
 
             st.session_state.qa_history = []
 
