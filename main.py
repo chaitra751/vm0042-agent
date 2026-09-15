@@ -180,9 +180,13 @@ except Exception as e:
 # CREATE RETRIEVER
 # ============================================================
 
+#retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
 retriever = vector_store.as_retriever(
+    search_type="mmr",
     search_kwargs={
-        "k": 4
+        "k": 6,
+        "fetch_k": 30,
+        "lambda_mult": 0.6
     }
 )
 
