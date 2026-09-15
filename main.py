@@ -329,3 +329,23 @@ question = st.text_input(
     placeholder="Example: What is the applicability of VM0042?"
 )
 
+if question:
+
+    with st.spinner("🔎 Searching VM0042 documents..."):
+
+        try:
+
+            answer = main_chain.invoke(question)
+
+            st.subheader("🤖 Answer")
+
+            st.write(answer)
+
+        except Exception as e:
+
+            st.error(
+                "❌ Error while generating the answer."
+            )
+
+            st.exception(e)
+
