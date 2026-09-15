@@ -38,17 +38,7 @@ st.set_page_config(
 
 st.title("🌱 VM0042 Question Answering System")
 
-st.markdown(
-    """
-    Ask questions about **VM0042 Improved Agricultural Land Management**.
-    
-    This application uses:
-    - Hugging Face embeddings
-    - FAISS vector database
-    - llama/Llama-3.1-8B-Instruct
-    - LangChain
-    """
-)
+
 
 
 # ============================================================
