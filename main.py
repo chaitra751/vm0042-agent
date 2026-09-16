@@ -46,14 +46,24 @@ HF_TOKEN = HF_TOKEN.strip()
 
 
 # ============================================================
-# LOAD EMBEDDINGS
+# MODEL
 # ============================================================
+
+MODEL_NAME = "openai/gpt-oss-120b"
+
+
+# ============================================================
+# EMBEDDING MODEL
+# ============================================================
+
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
 
 @st.cache_resource
 def load_embeddings():
 
     return HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        model_name=EMBEDDING_MODEL
     )
 
 
@@ -84,19 +94,15 @@ FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
 
 if not VECTOR_STORE_PATH.exists():
 
-    st.error(
-        f"""
-❌ Vector store folder not found.
+    st.error("❌ Vector store folder not found.")
 
-Expected location:
-
-`{VECTOR_STORE_PATH}`
-
-Your repository should contain:
-
+    st.code(
+        """
 vm0042-agent/
+│
 ├── main.py
 ├── requirements.txt
+│
 └── vector_store/
     ├── index.faiss
     └── index.pkl
@@ -108,24 +114,20 @@ vm0042-agent/
 
 if not FAISS_INDEX.exists():
 
-    st.error(
-        f"❌ `index.faiss` not found inside `{VECTOR_STORE_PATH}`"
-    )
+    st.error("❌ index.faiss not found.")
 
     st.stop()
 
 
 if not FAISS_PICKLE.exists():
 
-    st.error(
-        f"❌ `index.pkl` not found inside `{VECTOR_STORE_PATH}`"
-    )
+    st.error("❌ index.pkl not found.")
 
     st.stop()
 
 
 # ============================================================
-# LOAD FAISS VECTOR STORE
+# LOAD FAISS
 # ============================================================
 
 @st.cache_resource
@@ -147,11 +149,12 @@ except Exception as e:
     st.error("❌ Unable to load FAISS vector store.")
 
     st.write(
-        "Make sure the FAISS index was created using:"
+        "The FAISS index may have been created using a different "
+        "embedding model."
     )
 
-    st.code(
-        "sentence-transformers/all-MiniLM-L6-v2"
+    st.write(
+        f"Current embedding model: `{EMBEDDING_MODEL}`"
     )
 
     st.exception(e)
@@ -160,7 +163,67 @@ except Exception as e:
 
 
 # ============================================================
-# CREATE RETRIEVER
+# CHECK EMBEDDING DIMENSION
+# ============================================================
+
+try:
+
+    faiss_dimension = vector_store.index.d
+
+    test_embedding = embeddings.embed_query(
+        "VM0042 eligibility criteria"
+    )
+
+    embedding_dimension = len(test_embedding)
+
+except Exception as e:
+
+    st.error("❌ Could not check embedding dimensions.")
+    st.exception(e)
+    st.stop()
+
+
+# ============================================================
+# DIMENSION VALIDATION
+# ============================================================
+
+if faiss_dimension != embedding_dimension:
+
+    st.error("❌ FAISS embedding dimension mismatch.")
+
+    st.warning(
+        f"""
+The existing FAISS index expects:
+
+**{faiss_dimension} dimensions**
+
+But the current embedding model produces:
+
+**{embedding_dimension} dimensions**
+"""
+    )
+
+    st.markdown(
+        f"""
+### Current embedding model
+
+`{EMBEDDING_MODEL}`
+
+### What you need to do
+
+The FAISS index must be rebuilt using the **same embedding model**
+used by this application.
+
+Do not simply change the model name unless you also rebuild the
+FAISS index.
+"""
+    )
+
+    st.stop()
+
+
+# ============================================================
+# RETRIEVER
 # ============================================================
 
 retriever = vector_store.as_retriever(
@@ -197,13 +260,6 @@ except Exception as e:
 
 
 # ============================================================
-# SAME MODEL
-# ============================================================
-
-MODEL_NAME = "openai/gpt-oss-120b"
-
-
-# ============================================================
 # PROMPT
 # ============================================================
 
@@ -211,53 +267,64 @@ PROMPT_TEMPLATE = """
 You are a technical AI assistant specialized in the Verra VM0042
 Improved Agricultural Land Management methodology.
 
-Answer the user's question using ONLY the information provided
-in the VM0042 document context.
+Your task is to answer the user's question using ONLY the information
+provided in the VM0042 document context.
 
 IMPORTANT RULES:
 
-1. Use only the provided context.
+1. Use only the provided VM0042 context.
 
-2. Do not use your own knowledge or outside information.
+2. Do not use your own knowledge.
 
-3. Do not make assumptions.
+3. Do not use outside information.
 
-4. If the answer cannot be found in the context, respond exactly:
+4. Do not make assumptions.
+
+5. Do not invent any information.
+
+6. If the answer cannot be found in the context, respond exactly:
 
 "I don't know based on the provided VM0042 documents."
 
-5. Do not invent or modify VM0042:
+7. Do not invent or modify:
+- eligibility criteria
+- applicability conditions
+- project activities
 - requirements
-- values
+- definitions
 - equations
 - variables
-- definitions
-- eligibility criteria
-- project activities
 - monitoring requirements
+- emission reduction requirements
+- baseline requirements
+- leakage requirements
+- project boundary requirements
 
-6. For equations or calculations:
-- Use only equations present in the context.
+8. For eligibility questions, provide only eligibility information
+explicitly available in the context.
+
+9. For project activity questions, provide only project activities
+explicitly available in the context.
+
+10. For applicability questions, provide only applicability conditions
+explicitly available in the context.
+
+11. If multiple document sections are relevant, combine them carefully.
+
+12. If the context contains conflicting information, clearly mention
+the conflict.
+
+13. For equations:
+- Use only equations found in the context.
 - Explain the variables.
-- Substitute the provided values.
-- Show the calculation.
-- Give the final result with the correct unit.
+- Use only values provided in the context.
+- Do not create equations.
 
-7. If multiple sections are relevant, combine them carefully.
+14. Answer naturally and clearly.
 
-8. If the context contains conflicting information, mention the conflict.
+15. Keep the answer concise.
 
-9. For eligibility, applicability, baseline, project boundaries,
-additionality, leakage, emission reductions, monitoring, or project
-activities, use only requirements explicitly available in the context.
-
-10. Answer naturally and clearly.
-
-11. Do not copy large sections of the document.
-
-12. Keep the answer concise and factual.
-
-13. Mention the document section or page when available.
+16. Mention the document page or section when available.
 
 --------------------------------------------------
 VM0042 DOCUMENT CONTEXT
@@ -285,11 +352,14 @@ def retrieve_documents(question):
 
     try:
 
-        return retriever.invoke(question)
+        documents = retriever.invoke(question)
+
+        return documents
 
     except Exception as e:
 
         st.error("❌ Error retrieving documents from FAISS.")
+
         st.exception(e)
 
         return []
@@ -307,7 +377,10 @@ def format_context(documents):
 
     context_parts = []
 
-    for i, doc in enumerate(documents, start=1):
+    for i, doc in enumerate(
+        documents,
+        start=1
+    ):
 
         metadata = doc.metadata or {}
 
@@ -318,12 +391,17 @@ def format_context(documents):
 
         page = metadata.get(
             "page",
-            metadata.get("page_number", "")
+            metadata.get(
+                "page_number",
+                ""
+            )
         )
 
         if page != "":
 
-            source_info = f"{source}, page {page}"
+            source_info = (
+                f"{source}, page {page}"
+            )
 
         else:
 
@@ -332,6 +410,7 @@ def format_context(documents):
         context_parts.append(
             f"""
 --- DOCUMENT {i} ---
+
 Source: {source_info}
 
 {doc.page_content}
@@ -345,7 +424,10 @@ Source: {source_info}
 # GENERATE ANSWER
 # ============================================================
 
-def generate_answer(question, context):
+def generate_answer(
+    question,
+    context
+):
 
     prompt = PROMPT_TEMPLATE.format(
         context=context,
@@ -353,6 +435,7 @@ def generate_answer(question, context):
     )
 
     response = client.chat.completions.create(
+
         model=MODEL_NAME,
 
         messages=[
@@ -390,13 +473,17 @@ if question:
     # RETRIEVE
     # --------------------------------------------------------
 
-    with st.spinner("🔎 Searching VM0042 documents..."):
+    with st.spinner(
+        "🔎 Searching VM0042 documents..."
+    ):
 
-        documents = retrieve_documents(question)
+        documents = retrieve_documents(
+            question
+        )
 
 
     # --------------------------------------------------------
-    # NO DOCUMENTS
+    # CHECK DOCUMENTS
     # --------------------------------------------------------
 
     if not documents:
@@ -409,17 +496,21 @@ if question:
 
 
     # --------------------------------------------------------
-    # CREATE CONTEXT
+    # FORMAT CONTEXT
     # --------------------------------------------------------
 
-    context = format_context(documents)
+    context = format_context(
+        documents
+    )
 
 
     # --------------------------------------------------------
     # GENERATE ANSWER
     # --------------------------------------------------------
 
-    with st.spinner("🤖 Generating answer..."):
+    with st.spinner(
+        "🤖 Generating answer..."
+    ):
 
         try:
 
@@ -430,7 +521,10 @@ if question:
 
         except Exception as e:
 
-            st.error("❌ Error while generating the answer.")
+            st.error(
+                "❌ Error while generating the answer."
+            )
+
             st.exception(e)
 
             st.stop()
@@ -449,7 +543,9 @@ if question:
     # SOURCES
     # --------------------------------------------------------
 
-    with st.expander("📚 Retrieved VM0042 Sources"):
+    with st.expander(
+        "📚 Retrieved VM0042 Sources"
+    ):
 
         for i, doc in enumerate(
             documents,
