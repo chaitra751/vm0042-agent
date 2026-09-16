@@ -284,8 +284,7 @@ IMPORTANT RULES:
 
 12. Keep the answer concise and factual.
 
-13. When the context contains page numbers or section names, mention
-    them when useful.
+
 
 --------------------------------------------------
 VM0042 DOCUMENT CONTEXT
