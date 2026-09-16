@@ -31,7 +31,7 @@ st.title("🌱 VM0042 Question Answering System")
 
 
 # ============================================================
-# OPENROUTER API KEY (RELIABLE FETCHING)
+# API KEYS & SECRETS
 # ============================================================
 
 OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY")
@@ -72,8 +72,8 @@ FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
 
 if not VECTOR_STORE_PATH.exists() or not FAISS_INDEX.exists() or not FAISS_PICKLE.exists():
     st.error(
-        f"❌ Vector store components missing in: {VECTOR_STORE_PATH}\n\n"
-        f"Ensure both 'index.faiss' and 'index.pkl' exist in the directory."
+        f"❌ Vector store folder or indexes missing at:\n\n"
+        f"{VECTOR_STORE_PATH}"
     )
     st.stop()
 
@@ -106,13 +106,12 @@ except Exception as e:
 # ============================================================
 
 @st.cache_resource
-def load_llm():
+def load_llm(api_key):
     return ChatOpenAI(
-        # Uses OpenRouter's auto-router for free endpoints
-        model="openrouter/free", 
+        model="openrouter/free",
         temperature=0.1,
         max_tokens=512,
-        api_key=OPENROUTER_API_KEY,
+        api_key=api_key,
         base_url="https://openrouter.ai/api/v1",
         default_headers={
             "HTTP-Referer": "https://vm0042-agent-t9agaafqxbefko68wxzrp7.streamlit.app",
@@ -121,7 +120,7 @@ def load_llm():
     )
 
 try:
-    chat_model = load_llm()
+    chat_model = load_llm(OPENROUTER_API_KEY)
 except Exception as e:
     st.error("❌ Failed to initialize OpenRouter LLM.")
     st.exception(e)
@@ -215,7 +214,7 @@ main_chain = (
 
 
 # ============================================================
-# UI / QUESTION INPUT
+# QUESTION INPUT & EXECUTION
 # ============================================================
 
 question = st.text_input(
