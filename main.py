@@ -40,18 +40,13 @@ st.title("🌱 VM0042 Question Answering System")
 # HUGGING FACE TOKEN
 # ============================================================
 
-try:
-    HF_TOKEN = st.secrets["HF_TOKEN"]
-except Exception:
-    HF_TOKEN = os.getenv("HF_TOKEN")
-
+HF_TOKEN = st.secrets.get("HF_TOKEN")
 
 if not HF_TOKEN:
-    st.error(
-        "❌ Hugging Face token not found.\n\n"
-        "Add HF_TOKEN to Streamlit Cloud → Manage app → Settings → Secrets."
-    )
+    st.error("HF_TOKEN is missing from Streamlit Secrets.")
     st.stop()
+
+HF_TOKEN = HF_TOKEN.strip()
 
 
 # ============================================================
