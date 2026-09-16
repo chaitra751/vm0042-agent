@@ -129,7 +129,7 @@ def load_llm():
         base_url="https://openrouter.ai/api/v1",
 
         # Use a specific model instead of openrouter/free
-        model="meta-llama/llama-3.3-8b-instruct:free",
+        model="meta-llama/Llama-3.3-70B-Instruct-evals",
 
         temperature=0,
 
