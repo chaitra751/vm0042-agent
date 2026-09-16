@@ -192,7 +192,7 @@ retriever = vector_store.as_retriever(
 def load_llm():
 
     llm = HuggingFaceEndpoint(
-        repo_id="meta-llama/Llama-3.1-8B-Instruct",
+        repo_id="meta-llama/Llama-3.3-70B-Instruct-evals",
         task="text-generation",
         max_new_tokens=512,
         temperature=0.1,
