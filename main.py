@@ -125,10 +125,10 @@ def load_llm():
 
     return ChatOpenAI(
         model="openrouter/free",
-        temperature=0,
-        max_tokens=800,
         api_key=OPENROUTER_API_KEY,
         base_url="https://openrouter.ai/api/v1",
+        temperature=0,
+        max_tokens=800,
         default_headers={
             "HTTP-Referer": "https://vm0042-agent-t9agaafqxbefko68wxzrp7.streamlit.app",
             "X-Title": "VM0042 AI Agent"
