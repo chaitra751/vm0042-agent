@@ -432,17 +432,7 @@ with st.sidebar:
 
     st.divider()
 
-    st.caption(
-        f"LLM: {MODEL_NAME}"
-    )
-
-    st.caption(
-        "Embeddings: all-MiniLM-L6-v2"
-    )
-
-    st.caption(
-        "Retriever: FAISS + MMR"
-    )
+    
 
 
 # ============================================================
