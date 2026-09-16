@@ -4,8 +4,7 @@ from pathlib import Path
 import streamlit as st
 
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_ollama import ChatOllama
-
+from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
 
 from langchain_core.runnables import (
@@ -28,76 +27,30 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# ============================================================
-# TITLE
-# ============================================================
-
 st.title("🌱 VM0042 Question Answering System")
 
-st.caption(
-    "AI-powered VM0042 document question answering"
-)
-
 
 # ============================================================
-# VECTOR STORE PATH
+# OPENROUTER API KEY
 # ============================================================
 
-VECTOR_STORE_PATH = Path(__file__).parent / "vector_store"
+try:
+    OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+except Exception:
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-FAISS_INDEX = VECTOR_STORE_PATH / "index.faiss"
-FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
-
-
-# ============================================================
-# CHECK VECTOR STORE
-# ============================================================
-
-if not VECTOR_STORE_PATH.exists():
+if not OPENROUTER_API_KEY:
 
     st.error(
-        f"""
-        ❌ Vector store folder not found.
-
-        Expected:
-
-        `{VECTOR_STORE_PATH}`
-
-        Required structure:
-
-        vm0042-agent/
-        ├── main.py
-        ├── requirements.txt
-        └── vector_store/
-            ├── index.faiss
-            └── index.pkl
-        """
-    )
-
-    st.stop()
-
-
-if not FAISS_INDEX.exists():
-
-    st.error(
-        f"❌ index.faiss not found: `{FAISS_INDEX}`"
-    )
-
-    st.stop()
-
-
-if not FAISS_PICKLE.exists():
-
-    st.error(
-        f"❌ index.pkl not found: `{FAISS_PICKLE}`"
+        "❌ OPENROUTER_API_KEY not found.\n\n"
+        "Add it in Streamlit Cloud → Manage app → Settings → Secrets."
     )
 
     st.stop()
 
 
 # ============================================================
-# LOAD EMBEDDINGS
+# EMBEDDINGS
 # ============================================================
 
 @st.cache_resource
@@ -115,8 +68,42 @@ try:
 except Exception as e:
 
     st.error("❌ Failed to load embedding model.")
-
     st.exception(e)
+    st.stop()
+
+
+# ============================================================
+# VECTOR STORE
+# ============================================================
+
+VECTOR_STORE_PATH = (
+    Path(__file__).parent / "vector_store"
+)
+
+FAISS_INDEX = VECTOR_STORE_PATH / "index.faiss"
+FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
+
+
+if not VECTOR_STORE_PATH.exists():
+
+    st.error(
+        f"❌ Vector store folder not found:\n\n"
+        f"{VECTOR_STORE_PATH}"
+    )
+
+    st.stop()
+
+
+if not FAISS_INDEX.exists():
+
+    st.error("❌ index.faiss not found.")
+
+    st.stop()
+
+
+if not FAISS_PICKLE.exists():
+
+    st.error("❌ index.pkl not found.")
 
     st.stop()
 
@@ -143,11 +130,6 @@ except Exception as e:
 
     st.error("❌ Unable to load FAISS vector store.")
 
-    st.write(
-        "Make sure the FAISS index was created using "
-        "sentence-transformers/all-MiniLM-L6-v2."
-    )
-
     st.exception(e)
 
     st.stop()
@@ -168,16 +150,22 @@ retriever = vector_store.as_retriever(
 
 
 # ============================================================
-# OLLAMA LLM
+# OPENROUTER LLM
 # ============================================================
 
 @st.cache_resource
 def load_llm():
 
-    return ChatOllama(
-        model="llama3.1:8b",
+    return ChatOpenAI(
+        model="openrouter/free",
         temperature=0.1,
-        num_predict=512
+        max_tokens=512,
+        api_key=OPENROUTER_API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "https://vm0042-agent-t9agaafqxbefko68wxzrp7.streamlit.app",
+            "X-Title": "VM0042 Question Answering System"
+        }
     )
 
 
@@ -187,21 +175,7 @@ try:
 
 except Exception as e:
 
-    st.error(
-        """
-        ❌ Could not connect to Ollama.
-
-        Make sure Ollama is running and the model is installed.
-
-        Run:
-
-        ollama pull llama3.1:8b
-
-        Then:
-
-        ollama serve
-        """
-    )
+    st.error("❌ Failed to initialize OpenRouter LLM.")
 
     st.exception(e)
 
@@ -214,29 +188,29 @@ except Exception as e:
 
 prompt = PromptTemplate(
     template="""
-You are a technical AI assistant specialized in the Verra
-VM0042 Improved Agricultural Land Management methodology.
+You are a technical assistant specialized in the Verra VM0042
+Improved Agricultural Land Management methodology.
 
-Answer the user's question using ONLY the VM0042 document
-context provided below.
+Answer the user's question using ONLY the provided VM0042
+document context.
 
 RULES:
 
-1. Use only the provided context.
+1. Use ONLY the provided context.
 
 2. Do not use outside knowledge.
 
 3. Do not make assumptions.
 
-4. Do not invent requirements, values, equations,
-   definitions, eligibility criteria, or project activities.
+4. Do not invent VM0042 requirements, definitions,
+   equations, values, eligibility criteria, or project activities.
 
-5. If the answer is not available in the context, respond:
+5. If the answer cannot be found in the context, respond exactly:
 
 "I don't know based on the provided VM0042 documents."
 
 6. For eligibility questions:
-   - Give only requirements found in the context.
+   - Give only requirements present in the context.
    - Mention the relevant section when available.
 
 7. For project activity questions:
@@ -244,33 +218,33 @@ RULES:
 
 8. For equations:
    - Use only equations present in the context.
-   - Explain variables.
+   - Explain the variables.
    - Show calculations step by step.
    - Do not create equations.
 
-9. If information conflicts between documents,
-   mention the conflict.
+9. If documents contain conflicting information,
+   clearly mention the conflict.
 
 10. Keep the answer concise and factual.
 
-11. If document name or page information is available,
+11. If source or page information is available,
     mention it.
 
 ------------------------------------------------------------
-
-CONTEXT:
+VM0042 DOCUMENT CONTEXT
+------------------------------------------------------------
 
 {context}
 
 ------------------------------------------------------------
-
-QUESTION:
+USER QUESTION
+------------------------------------------------------------
 
 {question}
 
 ------------------------------------------------------------
-
-ANSWER:
+ANSWER
+------------------------------------------------------------
 """,
     input_variables=["context", "question"]
 )
@@ -303,9 +277,11 @@ def format_docs(docs):
         formatted.append(
             f"""
 DOCUMENT {i}
+
 Source: {source}
 Page: {page}
 
+Content:
 {doc.page_content}
 """
         )
@@ -314,7 +290,7 @@ Page: {page}
 
 
 # ============================================================
-# RETRIEVAL CHAIN
+# RETRIEVAL
 # ============================================================
 
 parallel_chain = RunnableParallel(
@@ -323,6 +299,7 @@ parallel_chain = RunnableParallel(
             retriever
             | RunnableLambda(format_docs)
         ),
+
         "question": RunnablePassthrough()
     }
 )
@@ -341,7 +318,7 @@ main_chain = (
 
 
 # ============================================================
-# USER INPUT
+# QUESTION
 # ============================================================
 
 question = st.text_input(
@@ -351,7 +328,7 @@ question = st.text_input(
 
 
 # ============================================================
-# GENERATE ANSWER
+# ANSWER
 # ============================================================
 
 if question:
@@ -385,8 +362,7 @@ with st.sidebar:
 
     st.header("🌱 VM0042 Agent")
 
-    st.write("LLM: Llama 3.1 8B")
-    st.write("LLM Provider: Ollama")
+    st.write("LLM: OpenRouter Free Models")
     st.write("Embeddings: all-MiniLM-L6-v2")
     st.write("Vector Store: FAISS")
     st.write("Retriever: MMR")
