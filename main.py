@@ -329,40 +329,17 @@ def retrieve_documents(question):
 # FORMAT CONTEXT
 # ============================================================
 
+
 def format_context(documents):
 
     if not documents:
-
         return "No relevant VM0042 documents were found."
 
     context_parts = []
 
-    for i, doc in enumerate(documents, start=1):
-
-        metadata = doc.metadata or {}
-
-        source = metadata.get(
-            "source",
-            "VM0042 document"
-        )
-
-        page = metadata.get(
-            "page",
-            metadata.get("page_number", "")
-        )
-
-        if page != "":
-            source_info = f"{source}, page {page}"
-        else:
-            source_info = str(source)
-
+    for doc in documents:
         context_parts.append(
-            f"""
---- DOCUMENT {i} ---
-Source: {source_info}
-
-{doc.page_content}
-"""
+            doc.page_content
         )
 
     return "\n\n".join(context_parts)
