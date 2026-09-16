@@ -1,10 +1,8 @@
-
 import streamlit as st
 from pathlib import Path
 
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-
 from huggingface_hub import InferenceClient
 
 
@@ -38,13 +36,17 @@ HF_TOKEN = st.secrets.get("HF_TOKEN")
 
 if not HF_TOKEN:
     st.error("❌ HF_TOKEN is missing from Streamlit Secrets.")
+    st.info(
+        "Go to Streamlit Cloud → App → Settings → Secrets "
+        "and add HF_TOKEN."
+    )
     st.stop()
 
 HF_TOKEN = HF_TOKEN.strip()
 
 
 # ============================================================
-# LOAD EMBEDDING MODEL
+# LOAD EMBEDDINGS
 # ============================================================
 
 @st.cache_resource
@@ -67,7 +69,7 @@ except Exception as e:
 
 
 # ============================================================
-# VECTOR STORE
+# VECTOR STORE PATH
 # ============================================================
 
 VECTOR_STORE_PATH = Path(__file__).parent / "vector_store"
@@ -76,26 +78,54 @@ FAISS_INDEX = VECTOR_STORE_PATH / "index.faiss"
 FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
 
 
+# ============================================================
+# CHECK VECTOR STORE
+# ============================================================
+
 if not VECTOR_STORE_PATH.exists():
 
-    st.error("❌ vector_store folder not found.")
+    st.error(
+        f"""
+❌ Vector store folder not found.
+
+Expected location:
+
+`{VECTOR_STORE_PATH}`
+
+Your repository should contain:
+
+vm0042-agent/
+├── main.py
+├── requirements.txt
+└── vector_store/
+    ├── index.faiss
+    └── index.pkl
+"""
+    )
+
     st.stop()
 
 
 if not FAISS_INDEX.exists():
 
-    st.error("❌ index.faiss not found.")
+    st.error(
+        f"❌ `index.faiss` not found inside `{VECTOR_STORE_PATH}`"
+    )
+
     st.stop()
 
 
 if not FAISS_PICKLE.exists():
 
-    st.error("❌ index.pkl not found.")
+    st.error(
+        f"❌ `index.pkl` not found inside `{VECTOR_STORE_PATH}`"
+    )
+
     st.stop()
 
 
 # ============================================================
-# LOAD FAISS
+# LOAD FAISS VECTOR STORE
 # ============================================================
 
 @st.cache_resource
@@ -114,10 +144,10 @@ try:
 
 except Exception as e:
 
-    st.error("❌ Failed to load FAISS vector store.")
+    st.error("❌ Unable to load FAISS vector store.")
 
     st.write(
-        "Your FAISS index must be created using:"
+        "Make sure the FAISS index was created using:"
     )
 
     st.code(
@@ -125,11 +155,12 @@ except Exception as e:
     )
 
     st.exception(e)
+
     st.stop()
 
 
 # ============================================================
-# RETRIEVER
+# CREATE RETRIEVER
 # ============================================================
 
 retriever = vector_store.as_retriever(
@@ -166,7 +197,7 @@ except Exception as e:
 
 
 # ============================================================
-# MODEL
+# SAME MODEL
 # ============================================================
 
 MODEL_NAME = "openai/gpt-oss-120b"
@@ -176,56 +207,73 @@ MODEL_NAME = "openai/gpt-oss-120b"
 # PROMPT
 # ============================================================
 
-PROMPT = """
-You are a technical assistant specialized in the Verra VM0042
+PROMPT_TEMPLATE = """
+You are a technical AI assistant specialized in the Verra VM0042
 Improved Agricultural Land Management methodology.
 
-Answer the question ONLY using the provided VM0042 document context.
+Answer the user's question using ONLY the information provided
+in the VM0042 document context.
 
-Rules:
+IMPORTANT RULES:
 
-1. Use only the information in the context.
-2. Do not use outside knowledge.
+1. Use only the provided context.
+
+2. Do not use your own knowledge or outside information.
+
 3. Do not make assumptions.
-4. Do not invent requirements, values, definitions, equations,
-   eligibility criteria, project activities, or monitoring rules.
-5. If the answer is not available in the context, say:
+
+4. If the answer cannot be found in the context, respond exactly:
 
 "I don't know based on the provided VM0042 documents."
 
-6. For eligibility questions, list only the eligibility criteria
-   found in the context.
+5. Do not invent or modify VM0042:
+- requirements
+- values
+- equations
+- variables
+- definitions
+- eligibility criteria
+- project activities
+- monitoring requirements
 
-7. For project activity questions, list only the activities found
-   in the context.
+6. For equations or calculations:
+- Use only equations present in the context.
+- Explain the variables.
+- Substitute the provided values.
+- Show the calculation.
+- Give the final result with the correct unit.
 
-8. For applicability questions, use only the applicability
-   conditions found in the context.
+7. If multiple sections are relevant, combine them carefully.
 
-9. For equations, use only equations explicitly available in
-   the context.
+8. If the context contains conflicting information, mention the conflict.
+
+9. For eligibility, applicability, baseline, project boundaries,
+additionality, leakage, emission reductions, monitoring, or project
+activities, use only requirements explicitly available in the context.
 
 10. Answer naturally and clearly.
 
-11. Keep the answer concise.
+11. Do not copy large sections of the document.
 
-12. Mention the document section or page when available.
+12. Keep the answer concise and factual.
 
-------------------------------------------------------------
+13. Mention the document section or page when available.
+
+--------------------------------------------------
 VM0042 DOCUMENT CONTEXT
-------------------------------------------------------------
+--------------------------------------------------
 
 {context}
 
-------------------------------------------------------------
-QUESTION
-------------------------------------------------------------
+--------------------------------------------------
+USER QUESTION
+--------------------------------------------------
 
 {question}
 
-------------------------------------------------------------
+--------------------------------------------------
 ANSWER
-------------------------------------------------------------
+--------------------------------------------------
 """
 
 
@@ -237,29 +285,27 @@ def retrieve_documents(question):
 
     try:
 
-        documents = retriever.invoke(question)
-
-        return documents
+        return retriever.invoke(question)
 
     except Exception as e:
 
-        st.error("❌ Error retrieving documents.")
+        st.error("❌ Error retrieving documents from FAISS.")
         st.exception(e)
 
         return []
 
 
 # ============================================================
-# FORMAT DOCUMENT CONTEXT
+# FORMAT CONTEXT
 # ============================================================
 
 def format_context(documents):
 
     if not documents:
 
-        return "No relevant documents found."
+        return "No relevant VM0042 documents were found."
 
-    context = []
+    context_parts = []
 
     for i, doc in enumerate(documents, start=1):
 
@@ -281,18 +327,18 @@ def format_context(documents):
 
         else:
 
-            source_info = source
+            source_info = str(source)
 
-        context.append(
+        context_parts.append(
             f"""
-DOCUMENT {i}
+--- DOCUMENT {i} ---
 Source: {source_info}
 
 {doc.page_content}
 """
         )
 
-    return "\n\n".join(context)
+    return "\n\n".join(context_parts)
 
 
 # ============================================================
@@ -301,19 +347,18 @@ Source: {source_info}
 
 def generate_answer(question, context):
 
-    final_prompt = PROMPT.format(
+    prompt = PROMPT_TEMPLATE.format(
         context=context,
         question=question
     )
 
     response = client.chat.completions.create(
-
         model=MODEL_NAME,
 
         messages=[
             {
                 "role": "user",
-                "content": final_prompt
+                "content": prompt
             }
         ],
 
@@ -336,7 +381,7 @@ question = st.text_input(
 
 
 # ============================================================
-# QUESTION ANSWER
+# PROCESS QUESTION
 # ============================================================
 
 if question:
@@ -364,7 +409,7 @@ if question:
 
 
     # --------------------------------------------------------
-    # FORMAT CONTEXT
+    # CREATE CONTEXT
     # --------------------------------------------------------
 
     context = format_context(documents)
@@ -385,10 +430,7 @@ if question:
 
         except Exception as e:
 
-            st.error(
-                "❌ Error while generating the answer."
-            )
-
+            st.error("❌ Error while generating the answer.")
             st.exception(e)
 
             st.stop()
@@ -407,7 +449,7 @@ if question:
     # SOURCES
     # --------------------------------------------------------
 
-    with st.expander("📚 Sources"):
+    with st.expander("📚 Retrieved VM0042 Sources"):
 
         for i, doc in enumerate(
             documents,
@@ -431,13 +473,14 @@ if question:
 
             if page != "":
 
-                st.write(
-                    f"Document {i}: {source} — Page {page}"
+                st.markdown(
+                    f"**Document {i}:** "
+                    f"{source} — Page {page}"
                 )
 
             else:
 
-                st.write(
-                    f"Document {i}: {source}"
+                st.markdown(
+                    f"**Document {i}:** "
+                    f"{source}"
                 )
-
