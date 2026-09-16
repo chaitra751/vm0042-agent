@@ -1,8 +1,11 @@
-streamlit 
-langchain 
-langchain-community 
-langchain-core 
-langchain-huggingface 
-langchain-ollama faiss-cpu 
-sentence-transformers 
+
+streamlit
+langchain
+langchain-community
+langchain-core
+langchain-huggingface
+langchain-ollama
+faiss-cpu
+sentence-transformers
 huggingface-hub
+ollama
