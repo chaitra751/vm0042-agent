@@ -192,12 +192,12 @@ retriever = vector_store.as_retriever(
 def load_llm():
 
     llm = HuggingFaceEndpoint(
-        repo_id="meta-llama/Llama-3.1-8B-Instruct",
-        task="text-generation",
-        max_new_tokens=512,
-        temperature=0.1,
-        huggingfacehub_api_token=HF_TOKEN
-    )
+    repo_id="meta-llama/Llama-3.3-70B-Instruct",
+    task="text-generation",
+    max_new_tokens=512,
+    temperature=0.1,
+    huggingfacehub_api_token=HF_TOKEN,
+)
 
     chat_model = ChatHuggingFace(
         llm=llm
