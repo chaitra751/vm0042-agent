@@ -155,9 +155,8 @@ retriever = vector_store.as_retriever(
 
 @st.cache_resource
 def load_llm():
-
     return ChatOpenAI(
-        model="openrouter/free",
+        model="meta-llama/llama-3.3-70b-instruct:free",
         temperature=0.1,
         max_tokens=512,
         api_key=OPENROUTER_API_KEY,
