@@ -3,11 +3,8 @@ from pathlib import Path
 
 import streamlit as st
 
-from langchain_huggingface import (
-    HuggingFaceEmbeddings,
-    HuggingFaceEndpoint,
-    ChatHuggingFace
-)
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_ollama import ChatOllama
 
 from langchain_community.vectorstores import FAISS
 
@@ -20,6 +17,7 @@ from langchain_core.runnables import (
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
+
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -30,27 +28,71 @@ st.set_page_config(
     layout="wide"
 )
 
+
 # ============================================================
 # TITLE
 # ============================================================
 
 st.title("🌱 VM0042 Question Answering System")
 
+st.caption(
+    "AI-powered VM0042 document question answering"
+)
+
+
 # ============================================================
-# HUGGING FACE TOKEN
+# VECTOR STORE PATH
 # ============================================================
 
-try:
-    HF_TOKEN = st.secrets["HF_TOKEN"]
-except Exception:
-    HF_TOKEN = os.getenv("HF_TOKEN")
+VECTOR_STORE_PATH = Path(__file__).parent / "vector_store"
+
+FAISS_INDEX = VECTOR_STORE_PATH / "index.faiss"
+FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
 
 
-if not HF_TOKEN:
+# ============================================================
+# CHECK VECTOR STORE
+# ============================================================
+
+if not VECTOR_STORE_PATH.exists():
+
     st.error(
-        "❌ Hugging Face token not found.\n\n"
-        "Add HF_TOKEN to Streamlit Cloud → Manage app → Settings → Secrets."
+        f"""
+        ❌ Vector store folder not found.
+
+        Expected:
+
+        `{VECTOR_STORE_PATH}`
+
+        Required structure:
+
+        vm0042-agent/
+        ├── main.py
+        ├── requirements.txt
+        └── vector_store/
+            ├── index.faiss
+            └── index.pkl
+        """
     )
+
+    st.stop()
+
+
+if not FAISS_INDEX.exists():
+
+    st.error(
+        f"❌ index.faiss not found: `{FAISS_INDEX}`"
+    )
+
+    st.stop()
+
+
+if not FAISS_PICKLE.exists():
+
+    st.error(
+        f"❌ index.pkl not found: `{FAISS_PICKLE}`"
+    )
+
     st.stop()
 
 
@@ -73,68 +115,8 @@ try:
 except Exception as e:
 
     st.error("❌ Failed to load embedding model.")
+
     st.exception(e)
-    st.stop()
-
-
-# ============================================================
-# VECTOR STORE PATH
-# ============================================================
-
-VECTOR_STORE_PATH = Path(__file__).parent / "vector_store"
-
-
-# ============================================================
-# CHECK VECTOR STORE
-# ============================================================
-
-if not VECTOR_STORE_PATH.exists():
-
-    st.error(
-        f"""
-        ❌ Vector store folder not found.
-
-        Expected location:
-
-        `{VECTOR_STORE_PATH}`
-
-        Your GitHub repository should contain:
-
-        ```
-        vm0042-agent/
-        ├── main.py
-        ├── requirements.txt
-        └── vector_store/
-            ├── index.faiss
-            └── index.pkl
-        ```
-        """
-    )
-
-    st.stop()
-
-
-# ============================================================
-# CHECK FAISS FILES
-# ============================================================
-
-FAISS_INDEX = VECTOR_STORE_PATH / "index.faiss"
-FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
-
-
-if not FAISS_INDEX.exists():
-    st.error(
-        f"❌ `index.faiss` not found inside:\n\n"
-        f"`{VECTOR_STORE_PATH}`"
-    )
-    st.stop()
-
-if not FAISS_PICKLE.exists():
-
-    st.error(
-        f"❌ `index.pkl` not found inside:\n\n"
-        f"`{VECTOR_STORE_PATH}`"
-    )
 
     st.stop()
 
@@ -146,12 +128,12 @@ if not FAISS_PICKLE.exists():
 @st.cache_resource
 def load_vector_store():
 
-    vector_store = FAISS.load_local(
+    return FAISS.load_local(
         str(VECTOR_STORE_PATH),
         embeddings,
         allow_dangerous_deserialization=True
     )
-    return vector_store
+
 
 try:
 
@@ -162,18 +144,19 @@ except Exception as e:
     st.error("❌ Unable to load FAISS vector store.")
 
     st.write(
-        "Make sure `index.faiss` and `index.pkl` were created "
-        "with the same embedding model."
+        "Make sure the FAISS index was created using "
+        "sentence-transformers/all-MiniLM-L6-v2."
     )
+
     st.exception(e)
+
     st.stop()
 
 
 # ============================================================
-# CREATE RETRIEVER
+# RETRIEVER
 # ============================================================
 
-#retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
 retriever = vector_store.as_retriever(
     search_type="mmr",
     search_kwargs={
@@ -185,25 +168,17 @@ retriever = vector_store.as_retriever(
 
 
 # ============================================================
-# HUGGING FACE LLM
+# OLLAMA LLM
 # ============================================================
 
 @st.cache_resource
 def load_llm():
 
-    llm = HuggingFaceEndpoint(
-        repo_id="meta-llama/Llama-3.1-8B-Instruct",
-        task="text-generation",
-        max_new_tokens=512,
+    return ChatOllama(
+        model="llama3.1:8b",
         temperature=0.1,
-        huggingfacehub_api_token=HF_TOKEN
+        num_predict=512
     )
-
-    chat_model = ChatHuggingFace(
-        llm=llm
-    )
-
-    return chat_model
 
 
 try:
@@ -212,8 +187,24 @@ try:
 
 except Exception as e:
 
-    st.error("❌ Failed to initialize Hugging Face LLM.")
+    st.error(
+        """
+        ❌ Could not connect to Ollama.
+
+        Make sure Ollama is running and the model is installed.
+
+        Run:
+
+        ollama pull llama3.1:8b
+
+        Then:
+
+        ollama serve
+        """
+    )
+
     st.exception(e)
+
     st.stop()
 
 
@@ -223,50 +214,61 @@ except Exception as e:
 
 prompt = PromptTemplate(
     template="""
-You are a technical assistant specialized in the Verra VM0042
-Improved Agricultural Land Management methodology.
+You are a technical AI assistant specialized in the Verra
+VM0042 Improved Agricultural Land Management methodology.
 
-Your task is to answer the user's question using ONLY the information
-provided in the context below.
+Answer the user's question using ONLY the VM0042 document
+context provided below.
 
-IMPORTANT RULES:
+RULES:
 
-1. Use only the provided context. Do not use your own knowledge or
-   assumptions to fill missing information.
+1. Use only the provided context.
 
-2. If the answer cannot be found in the context, respond exactly:
-   "I don't know based on the provided VM0042 documents."
+2. Do not use outside knowledge.
 
-3. Do not invent, modify, or assume any VM0042 requirements, values,
-   equations, variables, definitions, or eligibility criteria.
+3. Do not make assumptions.
 
-4. For questions about equations or calculations:
-   - First identify the relevant equation from the context.
-   - Write the equation clearly.
-   - Explain each variable and parameter.
-   - Substitute the given values.
-   - Show the calculation step by step.
-   - Give the final result with the correct unit.
-   - Do not create an equation if it is not present in the context.
+4. Do not invent requirements, values, equations,
+   definitions, eligibility criteria, or project activities.
 
-5. If multiple sections of the context are relevant, combine them
-   carefully and provide one clear answer.
+5. If the answer is not available in the context, respond:
 
-6. If the context contains conflicting information, mention the
-   conflict instead of choosing an answer by assumption.
+"I don't know based on the provided VM0042 documents."
 
-7. For questions about project activity eligibility, baseline,
-   project boundaries, additionality, leakage, emission reductions,
-   or monitoring, use the exact requirements available in the context.
+6. For eligibility questions:
+   - Give only requirements found in the context.
+   - Mention the relevant section when available.
 
-8. Keep the answer concise, factual, and easy to understand.
+7. For project activity questions:
+   - List only activities explicitly supported by the context.
 
-9. When possible, mention the relevant document section, equation,
-   or page information available in the context.
+8. For equations:
+   - Use only equations present in the context.
+   - Explain variables.
+   - Show calculations step by step.
+   - Do not create equations.
 
+9. If information conflicts between documents,
+   mention the conflict.
 
-USER QUESTION:
+10. Keep the answer concise and factual.
+
+11. If document name or page information is available,
+    mention it.
+
+------------------------------------------------------------
+
+CONTEXT:
+
+{context}
+
+------------------------------------------------------------
+
+QUESTION:
+
 {question}
+
+------------------------------------------------------------
 
 ANSWER:
 """,
@@ -278,36 +280,53 @@ ANSWER:
 # FORMAT DOCUMENTS
 # ============================================================
 
-def format_docs(retrieved_docs):
+def format_docs(docs):
 
-    if not retrieved_docs:
-        return "No relevant documents were found."
+    if not docs:
 
-    context_text = "\n\n".join(
-        doc.page_content
-        for doc in retrieved_docs
-    )
+        return "No relevant VM0042 documents were found."
 
-    return context_text
+    formatted = []
+
+    for i, doc in enumerate(docs, start=1):
+
+        source = doc.metadata.get(
+            "source",
+            "Unknown document"
+        )
+
+        page = doc.metadata.get(
+            "page",
+            "Unknown page"
+        )
+
+        formatted.append(
+            f"""
+DOCUMENT {i}
+Source: {source}
+Page: {page}
+
+{doc.page_content}
+"""
+        )
+
+    return "\n\n".join(formatted)
 
 
 # ============================================================
-# PARALLEL RETRIEVAL CHAIN
+# RETRIEVAL CHAIN
 # ============================================================
 
 parallel_chain = RunnableParallel(
     {
-        "context": retriever | RunnableLambda(format_docs),
+        "context": (
+            retriever
+            | RunnableLambda(format_docs)
+        ),
         "question": RunnablePassthrough()
     }
 )
 
-
-# ============================================================
-# OUTPUT PARSER
-# ============================================================
-
-parser = StrOutputParser()
 
 # ============================================================
 # MAIN RAG CHAIN
@@ -317,21 +336,29 @@ main_chain = (
     parallel_chain
     | prompt
     | chat_model
-    | parser
+    | StrOutputParser()
 )
 
+
 # ============================================================
-# USER QUESTION
+# USER INPUT
 # ============================================================
 
 question = st.text_input(
     "🔎 Ask your question about VM0042",
-    placeholder="Example: What is the applicability of VM0042?"
+    placeholder="Example: What is VM0042?"
 )
+
+
+# ============================================================
+# GENERATE ANSWER
+# ============================================================
 
 if question:
 
-    with st.spinner("🔎 Searching VM0042 documents..."):
+    with st.spinner(
+        "🔎 Searching VM0042 documents..."
+    ):
 
         try:
 
@@ -349,3 +376,17 @@ if question:
 
             st.exception(e)
 
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
+with st.sidebar:
+
+    st.header("🌱 VM0042 Agent")
+
+    st.write("LLM: Llama 3.1 8B")
+    st.write("LLM Provider: Ollama")
+    st.write("Embeddings: all-MiniLM-L6-v2")
+    st.write("Vector Store: FAISS")
+    st.write("Retriever: MMR")
