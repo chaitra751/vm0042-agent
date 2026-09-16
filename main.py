@@ -1,101 +1,150 @@
 import os
 from pathlib import Path
+
 import streamlit as st
-
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
-
+from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpoint
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
     page_title="VM0042 Agent",
     page_icon="🌱",
-    layout="centered"
+    layout="wide"
 )
-
-st.title("🌱 VM0042 Question Answering System")
-st.caption("AI assistant for the Verra VM0042 Improved Agricultural Land Management methodology")
 
 
 # ============================================================
-# HUGGING FACE TOKEN & SECRETS CHECK
+# TITLE
+# ============================================================
+
+st.title("🌱 VM0042 Question Answering System")
+
+st.caption(
+    "AI assistant for the Verra VM0042 Improved Agricultural Land Management methodology"
+)
+
+
+# ============================================================
+# HUGGING FACE TOKEN
 # ============================================================
 
 HF_TOKEN = st.secrets.get("HF_TOKEN")
 
 if not HF_TOKEN:
-    st.error("❌ Missing `HF_TOKEN` in Streamlit Secrets.")
-    st.info("Go to Streamlit Cloud → App → Settings → Secrets and add `HF_TOKEN`.")
+    st.error("❌ HF_TOKEN is missing from Streamlit Secrets.")
+    st.info(
+        "Go to Streamlit Cloud → App → Settings → Secrets "
+        "and add HF_TOKEN."
+    )
     st.stop()
 
 HF_TOKEN = HF_TOKEN.strip()
 
 
 # ============================================================
-# INITIALIZE RAG COMPONENTS (CACHED)
+# LOAD EMBEDDINGS
 # ============================================================
 
-VECTOR_STORE_PATH = Path(__file__).parent / "vector_store"
-MODEL_NAME = "openai/gpt-oss-120b"
-
-
 @st.cache_resource
-def init_rag_components():
-    # 1. Check Vector Store Path
-    if not VECTOR_STORE_PATH.exists():
-        st.error(f"❌ Vector store folder not found at: `{VECTOR_STORE_PATH}`")
-        st.stop()
-
-    # 2. Embeddings Model
-    embeddings = HuggingFaceEmbeddings(
+def load_embeddings():
+    return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
-    # 3. Load FAISS Store
-    vector_store = FAISS.load_local(
-        str(VECTOR_STORE_PATH),
-        embeddings,
-        allow_dangerous_deserialization=True
-    )
-
-    # 4. Create Retriever
-    retriever = vector_store.as_retriever(
-        search_type="mmr",
-        search_kwargs={
-            "k": 6,
-            "fetch_k": 30,
-            "lambda_mult": 0.6
-        }
-    )
-
-    chat_model = ChatOpenAI(
-    model="openai/gpt-oss-120b",
-    openai_api_key=HF_TOKEN,
-    openai_api_base="https://api-inference.huggingface.co/models/openai/gpt-oss-120b/v1",
-    temperature=0.1,
-    max_tokens=512,
-)
-
-    return retriever, chat_model
-
 
 try:
-    retriever, chat_model = init_rag_components()
+    embeddings = load_embeddings()
 except Exception as e:
-    st.error("❌ Failed to initialize system components.")
+    st.error("❌ Failed to load embedding model.")
     st.exception(e)
     st.stop()
 
 
 # ============================================================
-# PROMPT TEMPLATE
+# VECTOR STORE PATH & CHECKS
+# ============================================================
+
+VECTOR_STORE_PATH = Path(__file__).parent / "vector_store"
+FAISS_INDEX = VECTOR_STORE_PATH / "index.faiss"
+FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
+
+if not VECTOR_STORE_PATH.exists() or not FAISS_INDEX.exists() or not FAISS_PICKLE.exists():
+    st.error(
+        f"""
+❌ Vector store files missing from:
+`{VECTOR_STORE_PATH}`
+
+Make sure both `index.faiss` and `index.pkl` exist in the `vector_store` directory.
+"""
+    )
+    st.stop()
+
+
+# ============================================================
+# LOAD FAISS VECTOR STORE
+# ============================================================
+
+@st.cache_resource
+def load_vector_store():
+    return FAISS.load_local(
+        str(VECTOR_STORE_PATH),
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
+
+
+try:
+    vector_store = load_vector_store()
+except Exception as e:
+    st.error("❌ Unable to load FAISS vector store.")
+    st.exception(e)
+    st.stop()
+
+
+# ============================================================
+# CREATE RETRIEVER
+# ============================================================
+
+retriever = vector_store.as_retriever(
+    search_type="mmr",
+    search_kwargs={
+        "k": 6,
+        "fetch_k": 30,
+        "lambda_mult": 0.6
+    }
+)
+
+
+# ============================================================
+# LOAD LLM VIA HUGGINGFACE ENDPOINT
+# ============================================================
+
+MODEL_NAME = "openai/gpt-oss-120b"
+
+
+@st.cache_resource
+def load_llm():
+    return HuggingFaceEndpoint(
+        repo_id=MODEL_NAME,
+        huggingfacehub_api_token=HF_TOKEN,
+        temperature=0.1,
+        max_new_tokens=512,
+    )
+
+
+try:
+    llm = load_llm()
+except Exception as e:
+    st.error("❌ Failed to initialize Hugging Face LLM endpoint.")
+    st.exception(e)
+    st.stop()
+
+
+# ============================================================
+# PROMPT
 # ============================================================
 
 PROMPT_TEMPLATE = """
@@ -106,97 +155,153 @@ Your task is to answer the user's question using ONLY the information
 provided in the VM0042 document context.
 
 IMPORTANT RULES:
-1. Use only the provided context. Do not use outside knowledge.
-2. If the answer cannot be found in the context, respond exactly:
-   "I don't know based on the provided VM0042 documents."
-3. Do not invent, modify, or assume any VM0042 requirements, values, or equations.
-4. Keep the answer concise, factual, and natural.
+1. Use only the provided context.
+2. Do not use your own knowledge or outside information.
+3. Do not make assumptions.
+4. If the answer cannot be found in the context, respond exactly:
+"I don't know based on the provided VM0042 documents."
+5. Do not invent, modify, or assume any VM0042 requirements, values, or equations.
+6. Keep the answer concise and factual.
 
 --------------------------------------------------
 VM0042 DOCUMENT CONTEXT
 --------------------------------------------------
+
 {context}
 
 --------------------------------------------------
 USER QUESTION
 --------------------------------------------------
+
 {question}
+
+--------------------------------------------------
+ANSWER
+--------------------------------------------------
 """
 
-prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
-
 
 # ============================================================
-# FORMAT RETRIEVED DOCUMENTS
+# HELPER FUNCTIONS
 # ============================================================
 
-def format_docs(retrieved_docs):
-    if not retrieved_docs:
+def retrieve_documents(question):
+    try:
+        return retriever.invoke(question)
+    except Exception as e:
+        st.error("❌ Error retrieving documents from FAISS.")
+        st.exception(e)
+        return []
+
+
+def format_context(documents):
+    if not documents:
         return "No relevant VM0042 documents were found."
 
     context_parts = []
-    for i, doc in enumerate(retrieved_docs, start=1):
+    for i, doc in enumerate(documents, start=1):
         metadata = doc.metadata or {}
         source = metadata.get("source", "VM0042 document")
         page = metadata.get("page", metadata.get("page_number", ""))
         source_info = f"{source}, page {page}" if page != "" else str(source)
-        
+
         context_parts.append(
-            f"--- DOCUMENT {i} ({source_info}) ---\n{doc.page_content}"
+            f"--- DOCUMENT {i} ---\nSource: {source_info}\n\n{doc.page_content}"
         )
 
     return "\n\n".join(context_parts)
 
 
-# ============================================================
-# LCEL RAG PIPELINE
-# ============================================================
-
-parallel_chain = RunnableParallel(
-    {
-        "context": retriever | RunnableLambda(format_docs),
-        "question": RunnablePassthrough()
-    }
-)
-
-main_chain = parallel_chain | prompt | chat_model | StrOutputParser()
-
-
-# ============================================================
-# USER INPUT & EXECUTION INTERFACE
-# ============================================================
-
-with st.form("qa_form"):
-    question = st.text_input(
-        "🔎 Ask your question about VM0042",
-        placeholder="Example: What is the applicability of VM0042?"
+def generate_answer(question, context):
+    prompt = PROMPT_TEMPLATE.format(
+        context=context,
+        question=question
     )
-    submit_button = st.form_submit_button("Get Answer", type="primary")
+    return llm.invoke(prompt).strip()
 
 
-if submit_button and question.strip():
-    with st.spinner("🔎 Searching VM0042 documents & generating answer..."):
-        try:
-            # Execute LCEL Chain
-            answer = main_chain.invoke(question)
+# ============================================================
+# CHAT HISTORY
+# ============================================================
 
-            # Render Answer
-            st.subheader("🤖 Answer")
-            st.write(answer)
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-            # Render Referenced Sources in Expander
-            retrieved_docs = retriever.invoke(question)
-            if retrieved_docs:
-                with st.expander("📚 View Referenced Sources"):
-                    for i, doc in enumerate(retrieved_docs, start=1):
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
+with st.sidebar:
+    st.header("🌱 VM0042 Agent")
+    st.write(
+        "Ask questions about the Verra VM0042 "
+        "Improved Agricultural Land Management methodology."
+    )
+    st.divider()
+
+    if st.button("🗑️ Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+    st.divider()
+    st.caption(f"LLM: {MODEL_NAME}")
+    st.caption("Embeddings: all-MiniLM-L6-v2")
+    st.caption("Retriever: FAISS + MMR")
+
+
+# ============================================================
+# DISPLAY CHAT HISTORY
+# ============================================================
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+
+# ============================================================
+# USER INPUT & PROCESS QUESTION
+# ============================================================
+
+question = st.chat_input("Ask a question about VM0042...")
+
+if question:
+    # 1. Add User Message
+    st.session_state.messages.append({"role": "user", "content": question})
+    with st.chat_message("user"):
+        st.markdown(question)
+
+    # 2. Process Assistant Message
+    with st.chat_message("assistant"):
+        with st.spinner("🔎 Searching VM0042 documents..."):
+            documents = retrieve_documents(question)
+
+        if not documents:
+            answer = "I don't know based on the provided VM0042 documents."
+            st.markdown(answer)
+        else:
+            context = format_context(documents)
+
+            with st.spinner("🤖 Generating answer..."):
+                try:
+                    answer = generate_answer(question, context)
+                except Exception as e:
+                    st.error("❌ Error while generating the answer.")
+                    st.exception(e)
+                    answer = None
+
+            if answer:
+                st.markdown(answer)
+
+                # Show Sources
+                with st.expander("📚 Retrieved VM0042 Sources"):
+                    for i, doc in enumerate(documents, start=1):
                         metadata = doc.metadata or {}
                         source = metadata.get("source", "VM0042 document")
                         page = metadata.get("page", metadata.get("page_number", ""))
                         page_str = f" — Page {page}" if page != "" else ""
-
                         st.markdown(f"**Document {i}:** {source}{page_str}")
-                        st.caption(doc.page_content[:250] + "...")
 
-        except Exception as e:
-            st.error("❌ Error while generating the answer.")
-            st.exception(e)
+        # Save Response
+        if answer:
+            st.session_state.messages.append({"role": "assistant", "content": answer})
