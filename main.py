@@ -421,16 +421,7 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button(
-        "🗑️ Clear Chat",
-        use_container_width=True
-    ):
-
-        st.session_state.messages = []
-
-        st.rerun()
-
-    st.divider()
+  
 
     
 
