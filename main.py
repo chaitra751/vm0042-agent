@@ -389,7 +389,7 @@ def generate_answer(question, context):
             }
         ],
 
-        max_tokens=512,
+        max_tokens=700,
 
         temperature=0.1
     )
