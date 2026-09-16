@@ -10,7 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 
 # ============================================================
-# PAGE CONFIG
+# PAGE
 # ============================================================
 
 st.set_page_config(
@@ -19,14 +19,9 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# ============================================================
-# TITLE
-# ============================================================
-
 st.title("🌱 VM0042 AI Agent")
 st.caption(
-    "Ask questions about the Verra VM0042 Improved Agricultural Land Management methodology."
+    "AI-powered question answering system for Verra VM0042."
 )
 
 
@@ -34,81 +29,87 @@ st.caption(
 # OPENROUTER API KEY
 # ============================================================
 
-OPENROUTER_API_KEY = (
-    st.secrets.get("OPENROUTER_API_KEY")
-    if "OPENROUTER_API_KEY" in st.secrets
-    else os.getenv("OPENROUTER_API_KEY")
-)
+try:
+    OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+except Exception:
+    OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
 
 if not OPENROUTER_API_KEY:
-    st.error("OPENROUTER_API_KEY is not configured in Streamlit Secrets.")
+    st.error(
+        "OPENROUTER_API_KEY is missing. "
+        "Add it to Streamlit Cloud → Settings → Secrets."
+    )
     st.stop()
 
 
 # ============================================================
-# PATHS
+# PATH
 # ============================================================
 
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent
+
 VECTOR_STORE_PATH = BASE_DIR / "vector_store"
 
+INDEX_FILE = VECTOR_STORE_PATH / "index.faiss"
+PKL_FILE = VECTOR_STORE_PATH / "index.pkl"
+
+
+if not INDEX_FILE.exists():
+    st.error(f"Missing FAISS file: {INDEX_FILE}")
+    st.stop()
+
+if not PKL_FILE.exists():
+    st.error(f"Missing FAISS file: {PKL_FILE}")
+    st.stop()
+
 
 # ============================================================
-# LOAD EMBEDDINGS
+# EMBEDDINGS
 # ============================================================
 
 @st.cache_resource
 def load_embeddings():
 
-    return HuggingFaceEmbeddings(
+    embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
+    return embeddings
+
 
 # ============================================================
-# LOAD FAISS
+# VECTOR STORE
 # ============================================================
 
 @st.cache_resource
 def load_vector_store():
 
-    index_file = VECTOR_STORE_PATH / "index.faiss"
-    pickle_file = VECTOR_STORE_PATH / "index.pkl"
-
-    if not index_file.exists():
-        st.error(f"FAISS index not found: {index_file}")
-        st.stop()
-
-    if not pickle_file.exists():
-        st.error(f"FAISS metadata not found: {pickle_file}")
-        st.stop()
-
     embeddings = load_embeddings()
 
-    vector_store = FAISS.load_local(
+    db = FAISS.load_local(
         str(VECTOR_STORE_PATH),
         embeddings,
         allow_dangerous_deserialization=True
     )
 
-    return vector_store
+    return db
+
+
+vector_store = load_vector_store()
 
 
 # ============================================================
-# LOAD RETRIEVER
+# RETRIEVER
 # ============================================================
 
 @st.cache_resource
 def load_retriever():
 
-    vector_store = load_vector_store()
-
     return vector_store.as_retriever(
-        search_type="mmr",
+        search_type="similarity",
         search_kwargs={
-            "k": 6,
-            "fetch_k": 30,
-            "lambda_mult": 0.7
+            "k": 6
         }
     )
 
@@ -123,17 +124,27 @@ retriever = load_retriever()
 @st.cache_resource
 def load_llm():
 
-    return ChatOpenAI(
-        model="openrouter/free",
+    llm = ChatOpenAI(
         api_key=OPENROUTER_API_KEY,
         base_url="https://openrouter.ai/api/v1",
+
+        # Use a specific model instead of openrouter/free
+        model="meta-llama/llama-3.3-8b-instruct:free",
+
         temperature=0,
-        max_tokens=800,
+
+        max_tokens=1000,
+
         default_headers={
-            "HTTP-Referer": "https://vm0042-agent-t9agaafqxbefko68wxzrp7.streamlit.app",
-            "X-Title": "VM0042 AI Agent"
+            "HTTP-Referer":
+                "https://vm0042-agent-t9agaafqxbefko68wxzrp7.streamlit.app",
+
+            "X-Title":
+                "VM0042 AI Agent"
         }
     )
+
+    return llm
 
 
 llm = load_llm()
@@ -145,43 +156,51 @@ llm = load_llm()
 
 prompt = ChatPromptTemplate.from_template(
     """
-You are an AI assistant specialized in the Verra VM0042
+You are a specialized AI assistant for the Verra VM0042
 Improved Agricultural Land Management methodology.
 
-Your task is to answer the user's question using ONLY the
-provided VM0042 document context.
+You are answering questions using the retrieved VM0042
+document content.
 
-IMPORTANT RULES:
+STRICT RULES:
 
-1. Use only information contained in the provided context.
-2. Do not use your general knowledge.
+1. Answer the user's question directly.
+2. Use the provided VM0042 context as your factual source.
 3. Do not invent information.
-4. Do not assume information that is not explicitly present.
-5. Give a direct and natural chatbot-style answer.
-6. If the question asks for a list, provide a clear bullet list.
-7. If the question asks about eligibility criteria, provide only
-   eligibility requirements supported by the context.
-8. If the question asks for project activities, list only activities
-   explicitly supported by the context.
-9. If the question asks about an equation, explain the equation,
-   variables and calculation only when present in the context.
-10. If the context does not contain enough information, say:
+4. Do not add requirements that are not present in the context.
+5. Do not use unrelated general knowledge.
+6. If the answer is clearly available in the context,
+   explain it naturally.
+7. For lists, use bullet points.
+8. For eligibility questions, list the relevant eligibility
+   requirements from the documents.
+9. For project activity questions, list the activities supported
+   by the documents.
+10. For definitions, give a clear definition based on the documents.
+11. If the retrieved context does not contain enough information,
+    respond exactly:
 
-"I don't know based on the provided VM0042 documents."
+I don't know based on the provided VM0042 documents.
 
-11. Do not mention that you are an AI unless necessary.
-12. Keep the answer concise but complete.
-13. At the end, provide the source document/page when metadata is available.
+12. Do not simply copy large sections of the documents.
+13. Summarize and explain the information.
+14. Mention the source document/page when available.
 
-DOCUMENT CONTEXT:
------------------
+--------------------------------------------------
+VM0042 DOCUMENT CONTEXT
+--------------------------------------------------
+
 {context}
------------------
 
-USER QUESTION:
+--------------------------------------------------
+USER QUESTION
+--------------------------------------------------
+
 {question}
 
-ANSWER:
+--------------------------------------------------
+ANSWER
+--------------------------------------------------
 """
 )
 
@@ -192,9 +211,9 @@ ANSWER:
 
 def format_documents(documents):
 
-    formatted = []
+    context_parts = []
 
-    for i, doc in enumerate(documents, start=1):
+    for i, doc in enumerate(documents, 1):
 
         metadata = doc.metadata or {}
 
@@ -208,28 +227,30 @@ def format_documents(documents):
         page = metadata.get("page")
 
         if page is not None:
-            source_info = f"{source}, page {page}"
+            source_name = f"{source}, page {page}"
         else:
-            source_info = source
+            source_name = source
 
-        formatted.append(
+        text = doc.page_content
+
+        context_parts.append(
             f"""
 SOURCE {i}
-Document: {source_info}
+Document: {source_name}
 
-Content:
-{doc.page_content}
+{text}
 """
         )
 
-    return "\n".join(formatted)
+    return "\n".join(context_parts)
 
 
 # ============================================================
-# CHAT HISTORY
+# SESSION STATE
 # ============================================================
 
 if "messages" not in st.session_state:
+
     st.session_state.messages = []
 
 
@@ -239,46 +260,47 @@ if "messages" not in st.session_state:
 
 with st.sidebar:
 
-    st.header("🌱 VM0042")
+    st.header("🌱 VM0042 AI Agent")
 
-    st.write("**AI Agent Configuration**")
-
-    st.write("📚 Knowledge Base: VM0042 PDFs")
+    st.write("📚 Knowledge: VM0042 PDFs")
     st.write("🔎 Retrieval: FAISS")
     st.write("🧠 LLM: OpenRouter")
-    st.write("🔑 API Key: Configured")
+    st.write("🔑 Authentication: OpenRouter API")
 
     st.divider()
 
     if st.button("🗑️ Clear Chat"):
+
         st.session_state.messages = []
+
         st.rerun()
 
 
 # ============================================================
-# DISPLAY PREVIOUS CHAT
+# SHOW CHAT HISTORY
 # ============================================================
 
 for message in st.session_state.messages:
 
     with st.chat_message(message["role"]):
+
         st.markdown(message["content"])
 
 
 # ============================================================
-# USER QUESTION
+# CHAT INPUT
 # ============================================================
 
 question = st.chat_input(
-    "Ask a question about VM0042..."
+    "Ask anything about VM0042..."
 )
 
 
 if question:
 
-    # --------------------------------------------------------
+    # ========================================================
     # USER MESSAGE
-    # --------------------------------------------------------
+    # ========================================================
 
     st.session_state.messages.append(
         {
@@ -288,96 +310,116 @@ if question:
     )
 
     with st.chat_message("user"):
+
         st.markdown(question)
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # ASSISTANT
-    # --------------------------------------------------------
+    # ========================================================
 
     with st.chat_message("assistant"):
 
-        with st.spinner("Searching VM0042 documents..."):
+        try:
 
-            try:
+            with st.spinner("🔎 Searching VM0042 documents..."):
 
-                # Retrieve relevant documents
                 documents = retriever.invoke(question)
 
-                if not documents:
 
-                    answer = (
-                        "I don't know based on the provided "
-                        "VM0042 documents."
-                    )
+            if not documents:
 
-                else:
+                answer = (
+                    "I don't know based on the provided "
+                    "VM0042 documents."
+                )
 
-                    context = format_documents(documents)
+            else:
 
-                    # ------------------------------------------------
-                    # SEND CONTEXT + QUESTION TO OPENROUTER
-                    # ------------------------------------------------
+                context = format_documents(documents)
 
-                    messages = prompt.format_messages(
+                with st.spinner("🧠 Generating answer..."):
+
+                    formatted_prompt = prompt.format_messages(
                         context=context,
                         question=question
                     )
 
-                    response = llm.invoke(messages)
+                    response = llm.invoke(
+                        formatted_prompt
+                    )
 
                     answer = response.content
 
                     if not answer:
+
                         answer = (
                             "I don't know based on the provided "
                             "VM0042 documents."
                         )
 
-                st.markdown(answer)
 
-                # ----------------------------------------------------
-                # SOURCE DOCUMENTS
-                # ----------------------------------------------------
+            # =================================================
+            # DISPLAY ANSWER
+            # =================================================
 
-                with st.expander("📚 Retrieved Sources"):
+            st.markdown(answer)
 
-                    for i, doc in enumerate(documents, start=1):
 
-                        metadata = doc.metadata or {}
+            # =================================================
+            # SOURCES
+            # =================================================
 
-                        source = (
-                            metadata.get("source")
-                            or metadata.get("file_name")
-                            or metadata.get("filename")
-                            or "VM0042 document"
+            with st.expander("📚 Retrieved VM0042 Sources"):
+
+                for i, doc in enumerate(documents, 1):
+
+                    metadata = doc.metadata or {}
+
+                    source = (
+                        metadata.get("source")
+                        or metadata.get("file_name")
+                        or metadata.get("filename")
+                        or "VM0042 document"
+                    )
+
+                    page = metadata.get("page")
+
+                    if page is not None:
+
+                        st.markdown(
+                            f"**{i}. {source} — Page {page}**"
                         )
 
-                        page = metadata.get("page")
+                    else:
 
-                        if page is not None:
-                            st.write(
-                                f"**{i}. {source} — Page {page}**"
-                            )
-                        else:
-                            st.write(f"**{i}. {source}**")
-
-                        st.caption(
-                            doc.page_content[:700] + "..."
-                            if len(doc.page_content) > 700
-                            else doc.page_content
+                        st.markdown(
+                            f"**{i}. {source}**"
                         )
 
-            except Exception as e:
+                    preview = doc.page_content
 
-                answer = f"Error while generating the answer:\n\n`{e}`"
+                    if len(preview) > 600:
 
-                st.error(answer)
+                        preview = preview[:600] + "..."
+
+                    st.caption(preview)
 
 
-    # --------------------------------------------------------
-    # SAVE ASSISTANT RESPONSE
-    # --------------------------------------------------------
+        except Exception as e:
+
+            answer = f"""
+**Error while generating the answer**
+
+`{str(e)}`
+"""
+
+            st.error(answer)
+
+
+    # ========================================================
+    # SAVE ASSISTANT MESSAGE
+    # ========================================================
 
     st.session_state.messages.append(
         {
