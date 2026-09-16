@@ -75,14 +75,13 @@ def init_rag_components():
         }
     )
 
-    # 5. Hugging Face LLM Client (OpenAI-compatible Router)
     chat_model = ChatOpenAI(
-        model=MODEL_NAME,
-        openai_api_key=HF_TOKEN,
-        openai_api_base="https://api-inference.huggingface.co/v1",
-        temperature=0.1,
-        max_tokens=512
-    )
+    model="openai/gpt-oss-120b",
+    openai_api_key=HF_TOKEN,
+    openai_api_base="https://api-inference.huggingface.co/models/openai/gpt-oss-120b/v1",
+    temperature=0.1,
+    max_tokens=512,
+)
 
     return retriever, chat_model
 
