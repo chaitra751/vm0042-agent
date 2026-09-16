@@ -430,19 +430,7 @@ with st.sidebar:
 
         st.rerun()
 
-    st.divider()
-
-    st.caption(
-        f"LLM: {MODEL_NAME}"
-    )
-
-    st.caption(
-        "Embeddings: all-MiniLM-L6-v2"
-    )
-
-    st.caption(
-        "Retriever: FAISS + MMR"
-    )
+    
 
 
 # ============================================================
@@ -565,44 +553,7 @@ if question:
             # SHOW SOURCES
             # ------------------------------------------------
 
-            with st.expander(
-                "📚 Retrieved VM0042 Sources"
-            ):
-
-                for i, doc in enumerate(
-                    documents,
-                    start=1
-                ):
-
-                    metadata = doc.metadata or {}
-
-                    source = metadata.get(
-                        "source",
-                        "VM0042 document"
-                    )
-
-                    page = metadata.get(
-                        "page",
-                        metadata.get(
-                            "page_number",
-                            ""
-                        )
-                    )
-
-                    if page != "":
-
-                        st.markdown(
-                            f"**Document {i}:** "
-                            f"{source} — Page {page}"
-                        )
-
-                    else:
-
-                        st.markdown(
-                            f"**Document {i}:** "
-                            f"{source}"
-                        )
-
+            
 
     # --------------------------------------------------------
     # SAVE ASSISTANT RESPONSE
