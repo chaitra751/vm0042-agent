@@ -2,8 +2,12 @@ import os
 from pathlib import Path
 
 import streamlit as st
+
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpoint
+
+from huggingface_hub import InferenceClient
+
 
 # ============================================================
 # PAGE CONFIG
@@ -50,36 +54,83 @@ HF_TOKEN = HF_TOKEN.strip()
 
 @st.cache_resource
 def load_embeddings():
+
     return HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
 
 try:
+
     embeddings = load_embeddings()
+
 except Exception as e:
+
     st.error("❌ Failed to load embedding model.")
     st.exception(e)
     st.stop()
 
 
 # ============================================================
-# VECTOR STORE PATH & CHECKS
+# VECTOR STORE PATH
 # ============================================================
 
 VECTOR_STORE_PATH = Path(__file__).parent / "vector_store"
+
+
+# ============================================================
+# CHECK VECTOR STORE
+# ============================================================
+
+if not VECTOR_STORE_PATH.exists():
+
+    st.error(
+        f"""
+❌ Vector store folder not found.
+
+Expected location:
+
+`{VECTOR_STORE_PATH}`
+
+Your GitHub repository should contain:
+
+vm0042-agent/
+├── main.py
+├── requirements.txt
+└── vector_store/
+    ├── index.faiss
+    └── index.pkl
+"""
+    )
+
+    st.stop()
+
+
+# ============================================================
+# CHECK FAISS FILES
+# ============================================================
+
 FAISS_INDEX = VECTOR_STORE_PATH / "index.faiss"
 FAISS_PICKLE = VECTOR_STORE_PATH / "index.pkl"
 
-if not VECTOR_STORE_PATH.exists() or not FAISS_INDEX.exists() or not FAISS_PICKLE.exists():
-    st.error(
-        f"""
-❌ Vector store files missing from:
-`{VECTOR_STORE_PATH}`
 
-Make sure both `index.faiss` and `index.pkl` exist in the `vector_store` directory.
-"""
+if not FAISS_INDEX.exists():
+
+    st.error(
+        f"❌ `index.faiss` not found inside:\n\n"
+        f"`{VECTOR_STORE_PATH}`"
     )
+
+    st.stop()
+
+
+if not FAISS_PICKLE.exists():
+
+    st.error(
+        f"❌ `index.pkl` not found inside:\n\n"
+        f"`{VECTOR_STORE_PATH}`"
+    )
+
     st.stop()
 
 
@@ -89,18 +140,35 @@ Make sure both `index.faiss` and `index.pkl` exist in the `vector_store` directo
 
 @st.cache_resource
 def load_vector_store():
-    return FAISS.load_local(
+
+    vector_store = FAISS.load_local(
         str(VECTOR_STORE_PATH),
         embeddings,
         allow_dangerous_deserialization=True
     )
 
+    return vector_store
+
 
 try:
+
     vector_store = load_vector_store()
+
 except Exception as e:
+
     st.error("❌ Unable to load FAISS vector store.")
+
+    st.write(
+        "Make sure `index.faiss` and `index.pkl` were created "
+        "using the same embedding model:"
+    )
+
+    st.code(
+        "sentence-transformers/all-MiniLM-L6-v2"
+    )
+
     st.exception(e)
+
     st.stop()
 
 
@@ -119,28 +187,35 @@ retriever = vector_store.as_retriever(
 
 
 # ============================================================
-# LOAD LLM VIA HUGGINGFACE ENDPOINT
+# HUGGING FACE INFERENCE CLIENT
 # ============================================================
-
-MODEL_NAME = "openai/gpt-oss-120b"
-
 
 @st.cache_resource
 def load_llm():
-    return HuggingFaceEndpoint(
-        repo_id=MODEL_NAME,
-        huggingfacehub_api_token=HF_TOKEN,
-        temperature=0.1,
-        max_new_tokens=512,
+
+    client = InferenceClient(
+        token=HF_TOKEN
     )
+
+    return client
 
 
 try:
-    llm = load_llm()
+
+    client = load_llm()
+
 except Exception as e:
-    st.error("❌ Failed to initialize Hugging Face LLM endpoint.")
+
+    st.error("❌ Failed to initialize Hugging Face client.")
     st.exception(e)
     st.stop()
+
+
+# ============================================================
+# MODEL
+# ============================================================
+
+MODEL_NAME = "openai/gpt-oss-120b"
 
 
 # ============================================================
@@ -155,13 +230,62 @@ Your task is to answer the user's question using ONLY the information
 provided in the VM0042 document context.
 
 IMPORTANT RULES:
+
 1. Use only the provided context.
+
 2. Do not use your own knowledge or outside information.
+
 3. Do not make assumptions.
+
 4. If the answer cannot be found in the context, respond exactly:
+
 "I don't know based on the provided VM0042 documents."
-5. Do not invent, modify, or assume any VM0042 requirements, values, or equations.
-6. Keep the answer concise and factual.
+
+5. Do not invent, modify, or assume any VM0042:
+   - requirements
+   - values
+   - equations
+   - variables
+   - definitions
+   - eligibility criteria
+   - project activities
+   - monitoring requirements
+
+6. For equations or calculations:
+   - Identify the equation from the context.
+   - Write the equation clearly.
+   - Explain the variables.
+   - Substitute the provided values.
+   - Show the calculation.
+   - Give the final result with the correct unit.
+   - Never create an equation that is not present in the context.
+
+7. If multiple sections are relevant, combine them carefully.
+
+8. If the context contains conflicting information, clearly mention
+   the conflict instead of choosing one by assumption.
+
+9. For questions about:
+   - project activity eligibility
+   - applicability
+   - baseline
+   - project boundaries
+   - additionality
+   - leakage
+   - emission reductions
+   - monitoring
+   - project activities
+
+   use only the requirements explicitly available in the context.
+
+10. Answer naturally like a chatbot.
+
+11. Do not simply copy large sections of the document.
+
+12. Keep the answer concise and factual.
+
+13. When the context contains page numbers or section names, mention
+    them when useful.
 
 --------------------------------------------------
 VM0042 DOCUMENT CONTEXT
@@ -182,42 +306,95 @@ ANSWER
 
 
 # ============================================================
-# HELPER FUNCTIONS
+# RETRIEVE DOCUMENTS
 # ============================================================
 
 def retrieve_documents(question):
+
     try:
-        return retriever.invoke(question)
+
+        documents = retriever.invoke(question)
+
+        return documents
+
     except Exception as e:
+
         st.error("❌ Error retrieving documents from FAISS.")
         st.exception(e)
+
         return []
 
 
+# ============================================================
+# FORMAT CONTEXT
+# ============================================================
+
 def format_context(documents):
+
     if not documents:
+
         return "No relevant VM0042 documents were found."
 
     context_parts = []
+
     for i, doc in enumerate(documents, start=1):
+
         metadata = doc.metadata or {}
-        source = metadata.get("source", "VM0042 document")
-        page = metadata.get("page", metadata.get("page_number", ""))
-        source_info = f"{source}, page {page}" if page != "" else str(source)
+
+        source = metadata.get(
+            "source",
+            "VM0042 document"
+        )
+
+        page = metadata.get(
+            "page",
+            metadata.get("page_number", "")
+        )
+
+        if page != "":
+            source_info = f"{source}, page {page}"
+        else:
+            source_info = str(source)
 
         context_parts.append(
-            f"--- DOCUMENT {i} ---\nSource: {source_info}\n\n{doc.page_content}"
+            f"""
+--- DOCUMENT {i} ---
+Source: {source_info}
+
+{doc.page_content}
+"""
         )
 
     return "\n\n".join(context_parts)
 
 
+# ============================================================
+# GENERATE ANSWER
+# ============================================================
+
 def generate_answer(question, context):
+
     prompt = PROMPT_TEMPLATE.format(
         context=context,
         question=question
     )
-    return llm.invoke(prompt).strip()
+
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+
+        max_tokens=512,
+
+        temperature=0.1
+    )
+
+    return response.choices[0].message.content.strip()
 
 
 # ============================================================
@@ -225,6 +402,7 @@ def generate_answer(question, context):
 # ============================================================
 
 if "messages" not in st.session_state:
+
     st.session_state.messages = []
 
 
@@ -233,21 +411,38 @@ if "messages" not in st.session_state:
 # ============================================================
 
 with st.sidebar:
+
     st.header("🌱 VM0042 Agent")
+
     st.write(
         "Ask questions about the Verra VM0042 "
         "Improved Agricultural Land Management methodology."
     )
+
     st.divider()
 
-    if st.button("🗑️ Clear Chat", use_container_width=True):
+    if st.button(
+        "🗑️ Clear Chat",
+        use_container_width=True
+    ):
+
         st.session_state.messages = []
+
         st.rerun()
 
     st.divider()
-    st.caption(f"LLM: {MODEL_NAME}")
-    st.caption("Embeddings: all-MiniLM-L6-v2")
-    st.caption("Retriever: FAISS + MMR")
+
+    st.caption(
+        f"LLM: {MODEL_NAME}"
+    )
+
+    st.caption(
+        "Embeddings: all-MiniLM-L6-v2"
+    )
+
+    st.caption(
+        "Retriever: FAISS + MMR"
+    )
 
 
 # ============================================================
@@ -255,53 +450,169 @@ with st.sidebar:
 # ============================================================
 
 for message in st.session_state.messages:
+
     with st.chat_message(message["role"]):
+
         st.markdown(message["content"])
 
 
 # ============================================================
-# USER INPUT & PROCESS QUESTION
+# USER INPUT
 # ============================================================
 
-question = st.chat_input("Ask a question about VM0042...")
+question = st.chat_input(
+    "Ask a question about VM0042..."
+)
+
+
+# ============================================================
+# PROCESS QUESTION
+# ============================================================
 
 if question:
-    # 1. Add User Message
-    st.session_state.messages.append({"role": "user", "content": question})
+
+    # --------------------------------------------------------
+    # SHOW USER MESSAGE
+    # --------------------------------------------------------
+
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": question
+        }
+    )
+
     with st.chat_message("user"):
+
         st.markdown(question)
 
-    # 2. Process Assistant Message
+
+    # --------------------------------------------------------
+    # RETRIEVE DOCUMENTS
+    # --------------------------------------------------------
+
     with st.chat_message("assistant"):
-        with st.spinner("🔎 Searching VM0042 documents..."):
-            documents = retrieve_documents(question)
+
+        with st.spinner(
+            "🔎 Searching VM0042 documents..."
+        ):
+
+            documents = retrieve_documents(
+                question
+            )
+
+
+        # ----------------------------------------------------
+        # CHECK RETRIEVAL
+        # ----------------------------------------------------
 
         if not documents:
-            answer = "I don't know based on the provided VM0042 documents."
-            st.markdown(answer)
-        else:
-            context = format_context(documents)
 
-            with st.spinner("🤖 Generating answer..."):
+            answer = (
+                "I don't know based on the provided "
+                "VM0042 documents."
+            )
+
+            st.markdown(answer)
+
+        else:
+
+            # ------------------------------------------------
+            # CREATE CONTEXT
+            # ------------------------------------------------
+
+            context = format_context(
+                documents
+            )
+
+
+            # ------------------------------------------------
+            # GENERATE ANSWER
+            # ------------------------------------------------
+
+            with st.spinner(
+                "🤖 Generating answer..."
+            ):
+
                 try:
-                    answer = generate_answer(question, context)
+
+                    answer = generate_answer(
+                        question,
+                        context
+                    )
+
                 except Exception as e:
-                    st.error("❌ Error while generating the answer.")
+
+                    st.error(
+                        "❌ Error while generating the answer."
+                    )
+
                     st.exception(e)
+
                     answer = None
 
+
+            # ------------------------------------------------
+            # DISPLAY ANSWER
+            # ------------------------------------------------
+
             if answer:
+
                 st.markdown(answer)
 
-                # Show Sources
-                with st.expander("📚 Retrieved VM0042 Sources"):
-                    for i, doc in enumerate(documents, start=1):
-                        metadata = doc.metadata or {}
-                        source = metadata.get("source", "VM0042 document")
-                        page = metadata.get("page", metadata.get("page_number", ""))
-                        page_str = f" — Page {page}" if page != "" else ""
-                        st.markdown(f"**Document {i}:** {source}{page_str}")
 
-        # Save Response
-        if answer:
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+            # ------------------------------------------------
+            # SHOW SOURCES
+            # ------------------------------------------------
+
+            with st.expander(
+                "📚 Retrieved VM0042 Sources"
+            ):
+
+                for i, doc in enumerate(
+                    documents,
+                    start=1
+                ):
+
+                    metadata = doc.metadata or {}
+
+                    source = metadata.get(
+                        "source",
+                        "VM0042 document"
+                    )
+
+                    page = metadata.get(
+                        "page",
+                        metadata.get(
+                            "page_number",
+                            ""
+                        )
+                    )
+
+                    if page != "":
+
+                        st.markdown(
+                            f"**Document {i}:** "
+                            f"{source} — Page {page}"
+                        )
+
+                    else:
+
+                        st.markdown(
+                            f"**Document {i}:** "
+                            f"{source}"
+                        )
+
+
+    # --------------------------------------------------------
+    # SAVE ASSISTANT RESPONSE
+    # --------------------------------------------------------
+
+    if answer:
+
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": answer
+            }
+        )
