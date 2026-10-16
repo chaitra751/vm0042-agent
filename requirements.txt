@@ -14,7 +14,7 @@ langchain-openai
 langchain-huggingface
 transformers
 huggingface-hub
-
+langchain-groq
 
 python-dotenv
 
