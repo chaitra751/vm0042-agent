@@ -268,7 +268,7 @@ if question:
 
         try:
             with st.spinner(
-                "🔎 Searching VM0033 documents and generating answer..."
+                "🔎 Searching VM0042 documents and generating answer..."
             ):
 
                 # Retrieve documents once
