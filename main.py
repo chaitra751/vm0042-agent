@@ -218,7 +218,7 @@ if "messages" not in st.session_state:
 
 with st.sidebar:
 
-    st.header("🌱 VM0033 Agent")
+    st.header("🌱 VM0042 Agent")
 
     st.write(
         "Ask questions about the Verra VM0033 methodology."
