@@ -14,7 +14,7 @@ from huggingface_hub import InferenceClient
 # ============================================================
 
 st.set_page_config(
-    page_title="VM0042 Agent",
+    page_title="VM0033 Agent",
     page_icon="🌱",
     layout="wide"
 )
@@ -239,9 +239,9 @@ IMPORTANT RULES:
 
 4. If the answer cannot be found in the context, respond exactly:
 
-"I don't know based on the provided VM0042 documents."
+"I don't know based on the provided VM0033 documents."
 
-5. Do not invent, modify, or assume any VM0042:
+5. Do not invent, modify, or assume any VM0033:
    - requirements
    - values
    - equations
