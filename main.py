@@ -25,7 +25,7 @@ from langchain_core.output_parsers import StrOutputParser
 load_dotenv()
 
 st.set_page_config(
-    page_title="VM0033 RAG Chatbot",
+    page_title="VM0042 RAG Chatbot",
     page_icon="🌱",
     layout="wide"
 )
@@ -33,8 +33,7 @@ st.set_page_config(
 st.title("🌱 VM0042 Question Answering System")
 
 st.caption(
-    "AI assistant for the Verra VM0042 Tidal Wetland "
-    "and Seagrass Restoration methodology."
+    "AI assistant for the Verra VM0042."
 )
 
 
