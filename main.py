@@ -221,7 +221,7 @@ with st.sidebar:
     st.header("🌱 VM0042 Agent")
 
     st.write(
-        "Ask questions about the Verra VM0033 methodology."
+        "Ask questions about the Verra VM0042 methodology."
     )
 
     st.divider()
