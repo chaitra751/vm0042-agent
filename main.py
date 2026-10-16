@@ -302,16 +302,7 @@ if question:
                 "content": answer
             })
 
-            # Optional: show retrieved sources
-            with st.expander("View retrieved document chunks"):
-                for i, doc in enumerate(documents, start=1):
-                    st.markdown(f"**Document chunk {i}**")
-                    st.write(doc.page_content[:1500])
-
-                    if doc.metadata:
-                        st.caption(
-                            f"Metadata: {doc.metadata}"
-                        )
+            
 
         except Exception as e:
             st.error("Failed to generate the answer.")
